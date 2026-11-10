@@ -26,9 +26,13 @@ _Dernière mise à jour : 2026-11-10_
 6. Rendu des panneaux, mode par mode (métro en premier).
 
 ## Pièges de la toolchain (déjà gérés par `scripts/build.ps1`)
-- **Chemins > 260 caractères** (projet dans OneDrive) : cache/build PlatformIO redirigés vers
-  `%LOCALAPPDATA%\idfm\ws`, et `bruce/.pio` est une jonction vers ce dossier (les scripts de
-  Bruce codent en dur `.pio/libdeps`). Recommandé : déplacer le dépôt hors OneDrive (`C:\dev`).
+- **Chemins > 260 caractères** : build PlatformIO redirigé vers `%LOCALAPPDATA%\idfm\ws-<hash>`
+  (un espace par clone/worktree, clé = hash du chemin du dépôt), et `bruce/.pio` est une jonction
+  vers ce dossier (les scripts de Bruce codent en dur `.pio/libdeps`). Le cache de téléchargements
+  `%LOCALAPPDATA%\idfm\cache` est partagé. Dépôt déplacé hors OneDrive : un déplacement change
+  le hash → nouvel espace propre (l'ancien `ws*` peut être supprimé à la main).
+- **`git` + PowerShell 5.1** : la progression écrite sur stderr devient une erreur fatale →
+  `setup.ps1` l'encapsule.
 - **Variables MSYS/MinGW** héritées du terminal (Git Bash, Orca) : l'installeur ESP-IDF refuse
   de tourner → supprimées dans le script.
 - **`pio.exe` bloqué** (« Access denied ») : on lance `python -m platformio`.

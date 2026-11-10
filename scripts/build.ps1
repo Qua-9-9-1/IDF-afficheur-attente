@@ -25,16 +25,28 @@ if (-not (Test-Path "$Bruce\platformio.ini")) { throw 'Bruce submodule missing: 
 # PlatformIO workspace (cache, libdeps, build) outside OneDrive: avoids the Windows
 # 260-char path limit and OneDrive syncing gigabytes of build files.
 # Bruce's scripts hard-code `.pio/libdeps`, so bruce/.pio is kept but made a junction to it.
-$Ws = Join-Path $env:LOCALAPPDATA 'idfm\ws'
+# One workspace per checkout (keyed by its path): build files embed absolute source paths,
+# so a moved repo or a second worktree must not reuse another checkout's build/libdeps.
+$sha = [Security.Cryptography.SHA1]::Create()
+$key = -join ($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($Root.ToLowerInvariant()))[0..3] | ForEach-Object { $_.ToString('x2') })
+$Ws = Join-Path $env:LOCALAPPDATA "idfm\ws-$key"
 New-Item -ItemType Directory -Force $Ws | Out-Null
 $dotPio = Join-Path $Bruce '.pio'
-if ((Test-Path $dotPio) -and -not ((Get-Item $dotPio -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+$item = Get-Item $dotPio -Force -ErrorAction SilentlyContinue
+if ($item -and -not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
     Remove-Item -Recurse -Force $dotPio
+} elseif ($item -and $item.Target -and ($item.Target | Select-Object -First 1) -ne $Ws) {
+    $item.Delete()   # stale junction (repo moved): remove the link only, not its target
 }
 if (-not (Test-Path $dotPio)) { New-Item -ItemType Junction -Path $dotPio -Target $Ws | Out-Null }
-$env:PLATFORMIO_CACHE_DIR       = Join-Path $Ws 'cache'        # short paths for package extraction
+Write-Host "==> PlatformIO workspace: $Ws"
+# Download cache only (no paths inside): shared by all checkouts
+$env:PLATFORMIO_CACHE_DIR       = Join-Path $env:LOCALAPPDATA 'idfm\cache'
 $env:PLATFORMIO_BUILD_CACHE_DIR = Join-Path $Ws 'buildcache'
 $env:PLATFORMIO_BUILD_DIR       = Join-Path $Ws 'build'
+# Write libdeps/build through the short real path, not through bruce\.pio (deep library
+# examples otherwise exceed MAX_PATH when the repo itself sits in a long directory)
+$env:PLATFORMIO_WORKSPACE_DIR   = $Ws
 
 # ESP-IDF tools refuse to install when MSYS/MinGW vars are present (inherited from Git Bash terminals)
 Get-ChildItem env: | Where-Object { $_.Name -match '^(MSYSTEM.*|MINGW_.*)$' } | ForEach-Object {
@@ -71,6 +83,8 @@ if ($Monitor -and -not $Upload -and -not $Clean) {
     if ($Port) { $pioArgs += @('-p', $Port) }
 }
 Write-Host "==> pio $($pioArgs -join ' ')"
-# python -m platformio: pio.exe launcher can be blocked by local policy
+# python -m platformio: pio.exe launcher can be blocked by local policy.
+# 'Continue': when output is redirected, PS 5.1 would turn pio's stderr into a fatal error.
+$ErrorActionPreference = 'Continue'
 & $Py -m platformio @pioArgs
 exit $LASTEXITCODE

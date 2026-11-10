@@ -36,6 +36,10 @@ $venvPy = "$Root\.venv\Scripts\python.exe"
 & $venvPy -m pip install --upgrade platformio
 
 Write-Host '==> Fetching Bruce submodule'
-git submodule update --init --depth 1 bruce
+# git writes progress to stderr, which Windows PowerShell 5.1 turns into a terminating error
+$ErrorActionPreference = 'Continue'
+git submodule update --init --depth 1 bruce 2>&1 | ForEach-Object { "$_" }
+$ErrorActionPreference = 'Stop'
+if ($LASTEXITCODE -ne 0) { throw 'Failed to fetch the Bruce submodule.' }
 
 Write-Host '==> Done. Next: .\scripts\build.ps1'
