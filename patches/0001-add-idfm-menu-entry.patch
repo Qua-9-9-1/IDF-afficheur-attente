@@ -1,0 +1,20 @@
+diff --git a/src/core/menu_items/OthersMenu.cpp b/src/core/menu_items/OthersMenu.cpp
+index 0de6d4a..81d2efd 100644
+--- a/src/core/menu_items/OthersMenu.cpp
++++ b/src/core/menu_items/OthersMenu.cpp
+@@ -4,6 +4,7 @@
+ #include "core/utils.h"
+ #include "modules/badusb_ble/ducky_typer.h"
+ #include "modules/bjs_interpreter/interpreter.h"
++#include "modules/idfm/idfm_app.h"
+ #include "modules/others/clicker.h"
+ #include "modules/others/ibutton.h"
+ #include "modules/others/mic.h"
+@@ -14,6 +15,7 @@
+ 
+ void OthersMenu::optionsMenu() {
+     options = {
++        {"IDFM Board",   idfm_setup                   },
+         {"QRCodes",      qrcode_menu                  },
+         {"Megalodon",    shark_setup                  },
+ 

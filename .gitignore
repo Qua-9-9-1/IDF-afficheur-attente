@@ -1,0 +1,19 @@
+# Build / toolchain
+.pio/
+.venv/
+__pycache__/
+*.pyc
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Secrets
+secrets*
+*.local.*
+sd/idfm/config.json
+
+# OS
+Thumbs.db
+.DS_Store

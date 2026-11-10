@@ -1,0 +1,13 @@
+diff --git a/platformio.ini b/platformio.ini
+index 49d7584..fb2a2d7 100644
+--- a/platformio.ini
++++ b/platformio.ini
+@@ -202,7 +202,7 @@ lib_deps =
+ 	bitbank2/AnimatedGIF
+ 	bitbank2/PNGdec @ ^1.1.2
+ 	ESP32Async/ESPAsyncWebServer
+-	fastled/FastLED @^3.10.3
++	fastled/FastLED @3.10.3
+ 	jgromes/RadioLib @ ^7.4.0
+ 	; Pinned to fixed commits so upstream changes never break our patches
+ 	; (applied by patch_library_conflicts.py): IRQ-less I2C polling for

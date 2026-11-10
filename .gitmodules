@@ -1,0 +1,5 @@
+[submodule "bruce"]
+	path = bruce
+	url = https://github.com/pr3y/Bruce.git
+	ignore = dirty
+	shallow = true
