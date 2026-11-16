@@ -15,38 +15,32 @@ param(
     [string]$Port
 )
 $ErrorActionPreference = 'Stop'
-$Root  = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'tools.ps1')
 $Bruce = Join-Path $Root 'bruce'
-$Py    = Join-Path $Root '.venv\Scripts\python.exe'
+$Py    = Join-Path $ToolsDir 'python\tools\python.exe'
 
-if (-not (Test-Path $Py)) { throw 'PlatformIO missing: run .\scripts\setup.ps1 first.' }
+if (-not (Test-Path $Py)) { throw 'Toolchain missing: run .\scripts\setup.ps1 first.' }
 if (-not (Test-Path "$Bruce\platformio.ini")) { throw 'Bruce submodule missing: run .\scripts\setup.ps1 first.' }
 
-# PlatformIO workspace (cache, libdeps, build) outside OneDrive: avoids the Windows
-# 260-char path limit and OneDrive syncing gigabytes of build files.
-# Bruce's scripts hard-code `.pio/libdeps`, so bruce/.pio is kept but made a junction to it.
-# One workspace per checkout (keyed by its path): build files embed absolute source paths,
-# so a moved repo or a second worktree must not reuse another checkout's build/libdeps.
-$sha = [Security.Cryptography.SHA1]::Create()
-$key = -join ($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($Root.ToLowerInvariant()))[0..3] | ForEach-Object { $_.ToString('x2') })
-$Ws = Join-Path $env:LOCALAPPDATA "idfm\ws-$key"
+# Everything (PlatformIO core, toolchains, libdeps, build) lives in .tools\ (git-ignored).
+# Some library files sit ~190 characters deep under libdeps: with MAX_PATH = 260 the repo
+# itself must stay on a short path (e.g. C:\dev\idfm).
+if ($Root.Length -gt 60) {
+    Write-Warning "Repo path is $($Root.Length) chars long: the build may hit the Windows 260-char path limit. Prefer a short path such as C:\dev\idfm."
+}
+Set-PlatformIOEnv
+$Ws = $env:PLATFORMIO_WORKSPACE_DIR
 New-Item -ItemType Directory -Force $Ws | Out-Null
+# Bruce's scripts hard-code `.pio/libdeps`: bruce\.pio is a junction to the workspace.
 $dotPio = Join-Path $Bruce '.pio'
 $item = Get-Item $dotPio -Force -ErrorAction SilentlyContinue
 if ($item -and -not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
     Remove-Item -Recurse -Force $dotPio
 } elseif ($item -and $item.Target -and ($item.Target | Select-Object -First 1) -ne $Ws) {
-    $item.Delete()   # stale junction (repo moved): remove the link only, not its target
+    $item.Delete()   # stale junction (repo moved / old location): remove the link only
 }
 if (-not (Test-Path $dotPio)) { New-Item -ItemType Junction -Path $dotPio -Target $Ws | Out-Null }
-Write-Host "==> PlatformIO workspace: $Ws"
-# Download cache only (no paths inside): shared by all checkouts
-$env:PLATFORMIO_CACHE_DIR       = Join-Path $env:LOCALAPPDATA 'idfm\cache'
-$env:PLATFORMIO_BUILD_CACHE_DIR = Join-Path $Ws 'buildcache'
-$env:PLATFORMIO_BUILD_DIR       = Join-Path $Ws 'build'
-# Write libdeps/build through the short real path, not through bruce\.pio (deep library
-# examples otherwise exceed MAX_PATH when the repo itself sits in a long directory)
-$env:PLATFORMIO_WORKSPACE_DIR   = $Ws
+Write-Host "==> PlatformIO core: $env:PLATFORMIO_CORE_DIR"
 
 # ESP-IDF tools refuse to install when MSYS/MinGW vars are present (inherited from Git Bash terminals)
 Get-ChildItem env: | Where-Object { $_.Name -match '^(MSYSTEM.*|MINGW_.*)$' } | ForEach-Object {
@@ -54,15 +48,16 @@ Get-ChildItem env: | Where-Object { $_.Name -match '^(MSYSTEM.*|MINGW_.*)$' } | 
 }
 # Bruce's build scripts call `pio` directly, but pio.exe can be blocked by local policy
 # ("Access is denied"): put a pio.cmd shim running `python -m platformio` first in PATH.
-$shim = Join-Path $Ws 'shim'
+$shim = Join-Path $ToolsDir 'shim'
 New-Item -ItemType Directory -Force $shim | Out-Null
 Set-Content -Encoding ascii (Join-Path $shim 'pio.cmd') "@`"$Py`" -m platformio %*"
-$env:PATH = "$shim;" + (Join-Path $Root '.venv\Scripts') + ';' + $env:PATH
+$env:PATH = "$shim;" + (Join-Path $ToolsDir 'python\tools\Scripts') + ';' + $env:PATH
 
 # Bruce's patch.py weakens a symbol of libnet80211.a via `pio pkg exec`. If that call failed,
 # the original is left renamed to .old with the ".patched" flag set: redo it with objcopy.
-$fwLib   = Join-Path $env:USERPROFILE '.platformio\packages\framework-arduinoespressif32-libs\esp32s3\lib'
-$objcopy = Join-Path $env:USERPROFILE '.platformio\packages\toolchain-xtensa-esp-elf\bin\xtensa-esp32s3-elf-objcopy.exe'
+$pkgs    = Join-Path $env:PLATFORMIO_CORE_DIR 'packages'
+$fwLib   = Join-Path $pkgs 'framework-arduinoespressif32-libs\esp32s3\lib'
+$objcopy = Join-Path $pkgs 'toolchain-xtensa-esp-elf\bin\xtensa-esp32s3-elf-objcopy.exe'
 if ((Test-Path "$fwLib\libnet80211.a.old") -and -not (Test-Path "$fwLib\libnet80211.a") -and (Test-Path $objcopy)) {
     & $objcopy --weaken-symbol=ieee80211_raw_frame_sanity_check "$fwLib\libnet80211.a.old" "$fwLib\libnet80211.a"
     if ($LASTEXITCODE -ne 0) { throw 'Failed to repair libnet80211.a' }

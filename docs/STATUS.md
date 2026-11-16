@@ -21,34 +21,49 @@ _Dernière mise à jour : 2026-11-16_
     `docs/reference/RER.md`.
   - `idfm_app.cpp` : flux mode → ligne → arrêt → panneau (encodeur = défilement,
     clic = rafraîchir, Échap = retour) + entrée « RER demo » hors ligne.
+- **Simulateur navigateur** (`sim/`, `scripts/sim.ps1`) : le code `app/idfm` est compilé tel
+  quel en WebAssembly (zig) avec des couches Arduino / TFT_eSPI / Bruce imitées ; même police
+  GLCD que l'appareil → rendu du panneau identique au pixel près. Serveur Python local : carte SD
+  = `sd/`, proxy PRIM qui garde la clé côté serveur. Validé : démo RER, navigation
+  mode → ligne → arrêt, message « config absente ». Les menus Bruce sont une approximation.
+  Corrections trouvées grâce à lui : « à l'approche » mal aligné, horloge de la démo figée.
+- **Outils 100 % locaux au dépôt** (`.tools/`, `scripts/tools.ps1`) : Python portable (NuGet),
+  PlatformIO + toolchains, workspace de build, dépendances du simulateur.
 
 ## Décisions
 | Sujet | Décision |
 |---|---|
 | Intégration | App C++ native dans le firmware Bruce (pas de script JS) |
 | Branches | `main` + `feature/*` |
-| Toolchain | PlatformIO local installé par `scripts/setup.ps1` (rien de lourd dans le dépôt) |
+| Toolchain | Tout dans `.tools/` (ignoré par git), rien installé sur la machine |
+| Simulation | WebAssembly dans le navigateur (le poste bloque les `.exe` compilés localement) |
 | Clé API | Lue sur la SD (`/idfm/config.json`), jamais commitée |
 | Licence | AGPL-3.0 (imposée par Bruce si on distribue le firmware) — à confirmer |
 
 ## À faire (prochaines étapes)
-1. **Utilisateur** : créer un compte PRIM et générer une clé API ; copier `sd/idfm/*` sur la
-   carte SD (`/idfm/`) avec `config.json` rempli.
-2. Flasher et tester sur l'appareil : démo RER, puis données réelles (essayer d'abord
-   `STIF:StopArea:SP:45102:` = Châtelet - Les Halles).
-3. Photos de vrais panneaux RER → `docs/reference/photos/` pour valider couleurs, en-tête,
+1. **Utilisateur** : créer un compte PRIM et générer une clé API ; la mettre dans
+   `sd/idfm/config.json` (ignoré par git) et tester dans le simulateur (`.\scripts\sim.ps1`) ;
+   essayer d'abord `STIF:StopArea:SP:45102:` = Châtelet - Les Halles.
+2. Valider le build firmware 100 % local depuis un dépôt à chemin court (`C:\dev\…`), puis
+   flasher : copier `sd/idfm/*` sur la carte SD (`/idfm/`).
+3. Nettoyer les anciennes installations hors dépôt (avec accord) : `~/.platformio`,
+   `%LOCALAPPDATA%\idfm`, Python 3.12 installé par winget.
+4. Photos de vrais panneaux RER → `docs/reference/photos/` pour valider couleurs, en-tête,
    règle « < 1 min » / bascule en HH:MM (points marqués « de mémoire » dans `RER.md`).
-4. Vérifier le quota PRIM réel (≈ 1000 req/jour ?) ; `refreshSeconds` par défaut passé à 90.
-5. Autres modes : métro, Transilien, tram, bus (le générateur gère déjà `--modes`).
+5. Vérifier le quota PRIM réel (≈ 1000 req/jour ?) ; `refreshSeconds` par défaut passé à 90.
+6. Autres modes : métro, Transilien, tram, bus (le générateur gère déjà `--modes`).
 
 ## Pièges de la toolchain (déjà gérés par `scripts/build.ps1`)
-- **Chemins > 260 caractères** : build PlatformIO redirigé vers `%LOCALAPPDATA%\idfm\ws-<hash>`
-  (un espace par clone/worktree, clé = hash du chemin du dépôt), et `bruce/.pio` est une jonction
-  vers ce dossier (les scripts de Bruce codent en dur `.pio/libdeps`). Le cache de téléchargements
-  `%LOCALAPPDATA%\idfm\cache` est partagé. Dépôt déplacé hors OneDrive : un déplacement change
-  le hash → nouvel espace propre (l'ancien `ws*` peut être supprimé à la main).
-- **`git` + PowerShell 5.1** : la progression écrite sur stderr devient une erreur fatale →
-  `setup.ps1` l'encapsule.
+- **Chemins > 260 caractères** : certains fichiers de bibliothèques sont à ~190 caractères sous
+  `libdeps` → le dépôt doit être à un chemin court (≤ ~60 caractères, ex. `C:\dev\idfm`) ;
+  `build.ps1` avertit sinon. Les worktrees Orca (`…\orca\workspaces\…`) sont trop profondes pour
+  le firmware (le simulateur n'est pas concerné). Workspace PlatformIO : `.tools\w` (nom court),
+  `bruce/.pio` en est une jonction (les scripts de Bruce codent en dur `.pio/libdeps`).
+- **`.exe` compilés localement bloqués** par la sécurité du poste (« Access is denied » ; ni
+  AppLocker, ni Smart App Control, ni ASR) → simulateur en WebAssembly. `python.exe` et les
+  compilateurs (zig, xtensa) passent.
+- **PowerShell 5.1** : toute ligne stderr d'un outil natif (git, pip…) devient une erreur fatale
+  sous `Stop` → les scripts tournent en `Continue` et vérifient les codes de sortie (`Assert-Exit`).
 - **Variables MSYS/MinGW** héritées du terminal (Git Bash, Orca) : l'installeur ESP-IDF refuse
   de tourner → supprimées dans le script.
 - **`pio.exe` bloqué** (« Access denied ») : on lance `python -m platformio`, et un shim

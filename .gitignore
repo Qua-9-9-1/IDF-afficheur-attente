@@ -1,4 +1,5 @@
-# Build / toolchain
+# Build / toolchain (every tool is installed repo-locally in .tools/, see scripts/tools.ps1)
+.tools/
 .pio/
 .venv/
 __pycache__/

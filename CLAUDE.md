@@ -31,9 +31,17 @@ Objectif : reproduire **trait pour trait** les panneaux d'information voyageurs 
 app/idfm/            Sources de l'app (module Bruce) — c'est NOTRE code
 bruce/               Sous-module git : firmware Bruce upstream, épinglé (NE PAS modifier à la main)
 patches/             Patchs appliqués à Bruce pour y brancher l'app (entrée de menu…)
-scripts/             setup.ps1 (toolchain), build.ps1 (intégration + compilation + flash)
+scripts/             setup.ps1 (toolchain), build.ps1 (firmware), sim.ps1 (simulateur), tools.ps1 (commun)
+sim/                 Simulateur navigateur : couches Arduino/Bruce imitées + WebAssembly + serveur local
 docs/                STATUS.md (avancement), IDFM_API.md (notes API), références visuelles
+.tools/              (ignoré par git) TOUS les outils installés : Python portable, PlatformIO, builds
 ```
+
+**Règle d'installation : rien n'est installé sur la machine.** Tout outil (Python, PlatformIO,
+compilateurs, dépendances, caches, builds) va dans `.tools/` du dépôt, ignoré par git
+(voir `scripts/tools.ps1`). Pas de winget, pas de `~/.platformio`, pas de `%LOCALAPPDATA%`.
+Le poste bloque l'exécution des `.exe` compilés localement → le simulateur tourne en
+WebAssembly dans le navigateur, servi par le Python local.
 
 L'intégration se fait par `scripts/build.ps1` : il crée une jonction `bruce/src/modules/idfm`
 → `app/idfm`, applique `patches/*.patch` sur le sous-module, puis lance PlatformIO
@@ -66,14 +74,17 @@ de Bruce doit passer par un fichier dans `patches/`.
 ## Commandes
 
 ```powershell
-.\scripts\setup.ps1                 # une fois : Python, PlatformIO, sous-module Bruce
-.\scripts\build.ps1                 # intègre l'app et compile
+.\scripts\setup.ps1                 # une fois : Python portable, PlatformIO, sous-module Bruce
+.\scripts\build.ps1                 # intègre l'app et compile le firmware
 .\scripts\build.ps1 -Upload         # compile et flashe (USB)
 .\scripts\build.ps1 -Monitor        # moniteur série
+.\scripts\sim.ps1                   # simulateur navigateur (app complète)
+.\scripts\sim.ps1 -Demo             # simulateur, panneau RER de démo hors ligne
+.\scripts\sim.ps1 -Demo -Shot x.png -ExitAfter 3000   # capture sans fenêtre → .tools\sim\shots\
 ```
 
 Pièges connus de la toolchain Windows : voir la section dédiée de `docs/STATUS.md`.
-Log du dernier build : `%LOCALAPPDATA%\idfm-build.log` (si lancé avec redirection).
+Le build firmware exige un dépôt à chemin court (limite 260 caractères), ex. `C:\dev\idfm`.
 
 ## Rappels pour l'IA
 - Lire `docs/STATUS.md` avant de commencer, le mettre à jour avant de finir.
