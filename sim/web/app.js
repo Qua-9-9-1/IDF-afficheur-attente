@@ -1,5 +1,5 @@
 // Page side of the simulator: canvas display, keyboard/mouse -> encoder keys, worker lifecycle.
-// URL parameters: demo=1, keys=<n/p/s/e/w script>, exit=<ms>, shot=<name.png> (posted on exit),
+// URL parameters: demo=rer|metro, keys=<n/p/s/e/w script>, exit=<ms>, shot=<name.png> (posted on exit),
 // quit=1 (with shot: tells the local server to stop after saving the capture).
 'use strict';
 
@@ -11,7 +11,8 @@ const image = ctx.createImageData(320, 170);
 const logEl = document.getElementById('log');
 const statusEl = document.getElementById('status');
 
-document.getElementById(params.get('demo') ? 'nav-demo' : 'nav-app').setAttribute('aria-current', 'page');
+const navId = params.get('demo') === 'metro' ? 'nav-demo-metro' : params.get('demo') ? 'nav-demo' : 'nav-app';
+document.getElementById(navId).setAttribute('aria-current', 'page');
 
 function appendLog(text, cls) {
   const line = document.createElement('div');
@@ -86,7 +87,7 @@ for (const [id, bit] of [['btn-prev', KEY.PREV], ['btn-next', KEY.NEXT], ['btn-s
 
 // ---- program ----
 const args = ['idfm_sim'];
-if (params.get('demo')) args.push('--demo');
+if (params.get('demo')) args.push('--demo', params.get('demo') === 'metro' ? 'metro' : 'rer');
 if (params.get('keys')) args.push('--keys', params.get('keys'));
 if (params.get('exit')) args.push('--exit-after', params.get('exit'));
 

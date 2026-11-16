@@ -1,7 +1,7 @@
 // Simulator core: Arduino / Bruce API used by the IDFM app, implemented on top of the platform
 // backend (sim_backend.h). The app sources in app/idfm are compiled unchanged.
 //
-// Arguments: [--demo] [--keys "s,w,n,s"] [--exit-after ms]
+// Arguments: [--demo rer|metro] [--keys "s,w,n,s"] [--exit-after ms]
 //   --keys: scripted encoder, n=next p=prev s=click e=back w=wait (one step every 450 ms)
 
 #include "sim_backend.h"
@@ -10,6 +10,7 @@
 #include <HTTPClient.h>
 #include <WiFi.h>
 
+#include "../app/idfm/board_metro.h"
 #include "../app/idfm/board_rer.h"
 #include "../app/idfm/idfm_app.h"
 
@@ -309,11 +310,11 @@ String HTTPClient::header(const char *name) const {
 // Entry point
 // ===========================================================================
 int main(int argc, char **argv) {
-    bool demo = false;
+    std::string demo; // "", "rer" or "metro"
     for (int i = 1; i < argc; i++) {
         std::string a = argv[i];
         auto next = [&]() { return i + 1 < argc ? std::string(argv[++i]) : std::string(); };
-        if (a == "--demo") demo = true;
+        if (a == "--demo") demo = next();
         else if (a == "--exit-after") g_exitAfterMs = (uint32_t)atoi(next().c_str());
         else if (a == "--keys") {
             for (char c : next())
@@ -322,7 +323,9 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (demo) {
+    if (demo == "metro") {
+        metroBoardDemo();
+    } else if (!demo.empty()) {
         rerBoardDemo();
     } else {
         while (!g_quitRequested) idfm_setup();

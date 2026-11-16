@@ -65,8 +65,8 @@ def log(msg: str) -> None:
 
 
 def default_cache_dir() -> Path:
-    base = os.environ.get("LOCALAPPDATA") or os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")
-    return Path(base) / "idfm" / "referential-cache"
+    # Repo-local and git-ignored, like every tool of the project (nothing outside the repo).
+    return Path(__file__).resolve().parent.parent / ".tools" / "referential-cache"
 
 
 def download(url: str, dest: Path, max_age_h: float, refresh: bool) -> Path:

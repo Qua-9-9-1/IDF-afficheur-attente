@@ -6,6 +6,7 @@
 .EXAMPLE
     .\scripts\sim.ps1                 # full app: RER -> line -> stop -> live board
     .\scripts\sim.ps1 -Demo           # offline RER board with sample data
+    .\scripts\sim.ps1 -Demo -Board metro   # offline metro board with sample data
     .\scripts\sim.ps1 -Demo -Shot demo.png -ExitAfter 3000   # headless capture -> .tools\sim\shots\
     .\scripts\sim.ps1 -Keys "s,w,s"   # scripted encoder: n=next p=prev s=click e=back w=wait
 .NOTES
@@ -15,12 +16,14 @@
 #>
 param(
     [switch]$Demo,
+    [ValidateSet('rer', 'metro')][string]$Board = 'rer', # which demo board with -Demo
     [string]$Keys,
     [int]$Port = 8765,
     [string]$Shot,
     [int]$ExitAfter = 0,
     [switch]$NoBrowser,
-    [switch]$NoRun
+    [switch]$NoRun,
+    [ValidatePattern('^[\w-]+$')][string]$Variant = 'idfm_sim' # build output name (parallel runs)
 )
 $ErrorActionPreference = 'Continue' # see Assert-Exit in tools.ps1
 . (Join-Path $PSScriptRoot 'tools.ps1')
@@ -40,7 +43,7 @@ if (-not (Test-Path (Join-Path $Deps 'ArduinoJson.h'))) {
 }
 
 # Compile to WebAssembly (only when a source changed)
-$Wasm = Join-Path $SimDir 'idfm_sim.wasm'
+$Wasm = Join-Path $SimDir "$Variant.wasm"
 $sources = @(Get-ChildItem (Join-Path $Root 'app\idfm') -Filter *.cpp) +
            @(Get-Item (Join-Path $Root 'sim\sim_core.cpp'), (Join-Path $Root 'sim\sim_wasm.cpp'))
 $inputs  = $sources + @(Get-ChildItem (Join-Path $Root 'app\idfm') -Filter *.h) +
@@ -64,7 +67,7 @@ if ($NoRun) { Write-Host "==> Built $Wasm"; exit 0 }
 
 # Page parameters
 $query = @()
-if ($Demo)      { $query += 'demo=1' }
+if ($Demo)      { $query += "demo=$Board" }
 if ($Keys)      { $query += 'keys=' + ($Keys -replace '[^npsew]', '') }
 if ($ExitAfter) { $query += "exit=$ExitAfter" }
 if ($Shot)      { $query += "shot=$Shot"; $query += 'quit=1' }
@@ -82,6 +85,8 @@ if (-not $Shot) {
 # Headless capture with Microsoft Edge (already part of Windows): the page posts the PNG to the
 # local server, which stops once it is saved.
 if (-not $ExitAfter) { throw '-Shot needs -ExitAfter <ms>' }
+# Own port so a capture never collides with an interactive session on the default port
+if (-not $PSBoundParameters.ContainsKey('Port')) { $Port = 8799 }
 $edge = @("${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
           "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $edge) { throw 'Microsoft Edge not found (needed for -Shot)' }

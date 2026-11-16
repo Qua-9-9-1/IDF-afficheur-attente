@@ -3,6 +3,7 @@
 //   - prim_client  (fills Departure / BoardData from the PRIM API)
 //   - referential  (fills Line / Stop from the SD card referential)
 //   - board_rer    (renders BoardData like an official RER platform display)
+//   - board_metro  (renders BoardData like an official metro platform display)
 
 #include <Arduino.h>
 #include <time.h>
@@ -18,9 +19,18 @@ struct Line {
     TransportMode mode;
 };
 
+// One direction of a line at a station = one platform (metro displays are per platform).
+struct Direction {
+    String name;          // terminus / direction label shown as "Direction <name>", e.g. "La Défense"
+    String monitoringRef; // platform MonitoringRef, e.g. "STIF:StopPoint:Q:22092:"
+};
+
 struct Stop {
     String name;          // "Châtelet les Halles"
-    String monitoringRef; // full MonitoringRef, e.g. "STIF:StopArea:SP:474151:"
+    String monitoringRef; // MonitoringRef actually queried: the stop area for RER
+                          // ("STIF:StopArea:SP:45102:"), the chosen platform for metro
+    String direction;     // chosen direction name (empty when not applicable, e.g. RER)
+    std::vector<Direction> directions; // available directions (empty: no direction choice)
 };
 
 enum class DepartureStatus : uint8_t {
