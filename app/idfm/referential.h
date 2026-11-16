@@ -8,6 +8,10 @@
 //   /idfm/stops_<lineId>.json  {"v":1,"line":"C01742",
 //                               "stops":[{"name":"Châtelet - Les Halles",
 //                                         "ref":"STIF:StopArea:SP:45102:"}, ...]}
+// Metro stops also carry their directions, one per platform (-> Stop::directions):
+//     {"name":"Châtelet","ref":"STIF:StopArea:SP:42587:",
+//      "dirs":[{"name":"Porte de Clignancourt","ref":"STIF:StopPoint:Q:463158:"},
+//              {"name":"Bagneux - Lucie Aubrac","ref":"STIF:StopPoint:Q:22092:"}]}
 // Stops are in route order (main route end to end, then each extra branch).
 // See docs/REFERENTIEL.md.
 
@@ -25,12 +29,14 @@ bool idfmParseModeKey(const char *key, TransportMode &mode);
 uint16_t idfmHexToRgb565(const char *hex, uint16_t fallback);
 
 // Fills `out` with the lines of `mode`, in file order.
-// When /idfm/lines.json is missing or unreadable, built-in lines are used (RER A-E only).
+// When /idfm/lines.json is missing or unreadable, built-in lines are used (RER A-E, metro 1-14).
 // Returns true when the data comes from a file, false when the built-in fallback was used.
 bool idfmLoadLines(TransportMode mode, std::vector<Line> &out);
 
 // Fills `out` with the stops of `line`, in route order, from /idfm/stops_<line.id>.json.
-// When the file is missing, a few major built-in stations are used (RER only).
+// Each stop's monitoringRef is its stop area; metro stops also fill `directions` (platform refs),
+// to be chosen with selectDirection(). When the file is missing, a few major built-in stations
+// are used (RER A-E, metro 1, 4, 14).
 // Returns true when the data comes from a file, false when the built-in fallback was used
 // (in that case `out` may be empty).
 bool idfmLoadStops(const Line &line, std::vector<Stop> &out);

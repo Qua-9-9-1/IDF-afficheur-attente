@@ -21,6 +21,18 @@ _Dernière mise à jour : 2026-11-16_
     `docs/reference/RER.md`.
   - `idfm_app.cpp` : flux mode → ligne → arrêt → panneau (encodeur = défilement,
     clic = rafraîchir, Échap = retour) + entrée « RER demo » hors ligne.
+- **RER validé par l'utilisateur** dans le simulateur (2026-11-16).
+- **Métro (en simulateur, pas encore testé sur l'appareil ni avec l'API réelle)** :
+  - Référentiel : 16 lignes (1–14, 3B, 7B), stations dans l'ordre, et pour chaque station les
+    directions avec leur quai `STIF:StopPoint:Q:<id>:` (un panneau métro = un quai). Libellés
+    des lignes à branches : terminus joints par « / ». Détails : `docs/REFERENTIEL.md`.
+  - Parcours : Métro → ligne → station → direction (menu sauté s'il n'y en a qu'une) → panneau.
+  - `board_metro.*` : « Direction X », 2 prochains trains (destination par train pour les
+    branches), attente en minutes ambre, « à l'approche » clignotant, « à quai », « Supprimé »,
+    « Service terminé » la nuit, bandeau INFO. Référence : `docs/reference/METRO.md`.
+  - Helpers d'affichage partagés RER/métro : `board_common.*`.
+  - À vérifier avec une clé : `STIF:StopPoint:Q:463158:` (ligne 4 Châtelet → Porte de
+    Clignancourt) doit ne renvoyer que ce quai.
 - **Simulateur navigateur** (`sim/`, `scripts/sim.ps1`) : le code `app/idfm` est compilé tel
   quel en WebAssembly (zig) avec des couches Arduino / TFT_eSPI / Bruce imitées ; même police
   GLCD que l'appareil → rendu du panneau identique au pixel près. Serveur Python local : carte SD

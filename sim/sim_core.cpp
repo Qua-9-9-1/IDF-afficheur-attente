@@ -95,11 +95,11 @@ void drawBorder() {
     tft.drawRoundRect(5, 5, kScreenW - 10, kScreenH - 10, 5, bruceConfig.priColor);
 }
 
-void drawTitle(const String &title) {
+void drawTitle(const String &title, int y = 9) {
     tft.setTextSize(FM);
     tft.setTextDatum(TC_DATUM);
     tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
-    tft.drawString(title, kScreenW / 2, 9);
+    tft.drawString(title, kScreenW / 2, y);
     tft.setTextDatum(TL_DATUM);
 }
 
@@ -108,10 +108,10 @@ String clip(const String &s, int maxChars) {
     return s.substring(0, maxChars - 1) + ".";
 }
 
-// Bruce submenu: title, previous / current (large) / next option.
+// Bruce submenu: title under the status bar (y=30), previous / current (large) / next option.
 void drawSubmenu(std::vector<Option> &opts, int idx, const char *title) {
     drawBorder();
-    drawTitle(title);
+    drawTitle(title, 30);
     int n = (int)opts.size();
     auto label = [&](int i) { return opts[((i % n) + n) % n].label; };
     tft.setTextDatum(TC_DATUM);

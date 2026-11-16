@@ -1,5 +1,6 @@
 #include "board_rer.h"
 
+#include "board_common.h"
 #include "prim_client.h"
 
 #include "core/mykeyboard.h"
@@ -14,6 +15,8 @@
 // - Drawing goes through the TFT_eSPI base class: either a full-frame 16-bit sprite (PSRAM,
 //   flicker-free, regions pushed with pushSprite(tx, ty, sx, sy, sw, sh)) or, as a fallback,
 //   the native TFT_eSPI behind the global `tft` (bypasses the tft_logger WebUI mirror).
+
+using namespace idfmui;
 
 namespace {
 
@@ -36,10 +39,6 @@ constexpr long kDepartedGraceS = 120;    // hide departures older than this (unl
 // ---------------------------------------------------------------------------------------
 // Palette (RGB565). Approximations of the real screens, see docs/reference/RER.md.
 // ---------------------------------------------------------------------------------------
-constexpr uint16_t rgb(uint8_t r, uint8_t g, uint8_t b) {
-    return (uint16_t)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
-}
-
 constexpr uint16_t kBg = rgb(0x0B, 0x1F, 0x4D);       // night blue background
 constexpr uint16_t kBgAlt = rgb(0x11, 0x29, 0x5E);    // alternate row
 constexpr uint16_t kHeaderBg = rgb(0x06, 0x15, 0x38); // header band
@@ -204,53 +203,7 @@ String convert(const String &utf8, bool glcd) {
 // Drawing helpers
 // ---------------------------------------------------------------------------------------
 
-// Pixel width of a GLCD string (bytes == glyphs), without the trailing blank column.
-int32_t textW(const String &s, uint8_t size) {
-    if (s.length() == 0) return 0;
-    return (int32_t)s.length() * 6 * size - size;
-}
-
-void drawText(TFT_eSPI &g, const String &s, int32_t x, int32_t y, uint8_t size, uint16_t fg) {
-    g.setTextFont(1);
-    g.setTextSize(size);
-    g.setTextColor(fg); // transparent background: areas are pre-filled
-    g.setTextDatum(TL_DATUM);
-    g.drawString(s, x, y);
-}
-
-// Usual French abbreviations of station names, as seen on the real screens.
-String abbreviate(String s) {
-    s.replace("Sainte-", "Ste-");
-    s.replace("Saint-", "St-");
-    s.replace("SAINTE-", "STE-");
-    s.replace("SAINT-", "ST-");
-    return s;
-}
-
-// Shorten a (GLCD-encoded) string to fit `maxW` pixels: abbreviations first, then
-// truncation with a trailing dot.
-String fitText(String s, int32_t maxW, uint8_t size) {
-    if (textW(s, size) <= maxW) return s;
-    s = abbreviate(s);
-    if (textW(s, size) <= maxW) return s;
-    int maxChars = (maxW + size) / (6 * size);
-    if (maxChars <= 0) return String();
-    if (maxChars == 1) return s.substring(0, 1);
-    String t = s.substring(0, maxChars - 1);
-    t.trim();
-    return t + ".";
-}
-
-String clockText(time_t t) {
-    if (t < 1600000000) return "--:--"; // clock not synchronised yet
-    // Bruce never sets TZ (its system clock holds local time): use the explicit
-    // UTC -> Europe/Paris conversion of prim_client instead of localtime_r.
-    struct tm tmLocal;
-    if (!primLocalTime(t, tmLocal)) return "--:--";
-    char buf[8];
-    strftime(buf, sizeof(buf), "%H:%M", &tmLocal);
-    return String(buf);
-}
+// (textW, drawText, abbreviate, fitText, clockText, rgb: see board_common.h)
 
 void lineColors(const Line &line, uint16_t &bg, uint16_t &fg) {
     if (line.color != 0 || line.textColor != 0) {

@@ -95,13 +95,15 @@ void drawLineHeader(const Line &line) {
     tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
     tft.drawString(mode, x, y + 2);
     x += modeW + 4;
-    tft.fillRoundRect(x, y, pillW, h, 3, line.color);
+    // RER: square-ish pictogram; metro: round roundel (pill for "3B", "10"...).
+    tft.fillRoundRect(x, y, pillW, h, line.mode == TransportMode::Metro ? h / 2 : 3, line.color);
     tft.setTextColor(line.textColor, line.color);
     tft.drawString(name, x + 4, y + 2);
 }
 
-// loopOptions hover hook: draws the header of the stop list, then lets loopOptions draw the list.
-bool stopListHover(void *ptr, bool shouldRender) {
+// loopOptions hover hook: draws the line header (pointer = the Line), then lets loopOptions draw
+// the menu. Used by the line menu (header of the hovered line), the stop and direction lists.
+bool lineHeaderHover(void *ptr, bool shouldRender) {
     if (shouldRender && ptr != nullptr) drawLineHeader(*static_cast<const Line *>(ptr));
     return false;
 }
@@ -110,6 +112,8 @@ bool stopListHover(void *ptr, bool shouldRender) {
 String lastLineId;
 String lastStopLineId;
 int lastStopIndex = 0;
+String lastDirectionKey;  // line id + stop name of the last direction choice
+String lastDirectionName;
 
 } // namespace
 
@@ -130,8 +134,9 @@ bool selectLine(TransportMode mode, Line &out) {
     std::vector<Option> options;
     options.reserve(lines.size());
     for (size_t i = 0; i < lines.size(); i++) {
+        // "RER A", "Metro 1", "Metro 3B"... with the line pictogram of the hovered line in the top bar.
         String label = String(modeLabel(mode)) + " " + toAscii(lines[i].shortName);
-        options.emplace_back(label, [&chosen, i]() { chosen = (int)i; });
+        options.emplace_back(label, [&chosen, i]() { chosen = (int)i; }, false, lineHeaderHover, &lines[i]);
     }
     loopOptions(options, MENU_TYPE_SUBMENU, modeLabel(mode), start);
 
@@ -162,7 +167,7 @@ bool selectStop(const Line &line, Stop &out) {
             toAscii(stops[i].name),
             [&chosen, i]() { chosen = (int)i; },
             false,
-            stopListHover,
+            lineHeaderHover,
             const_cast<Line *>(&line)
         );
     }
@@ -174,5 +179,40 @@ bool selectStop(const Line &line, Stop &out) {
     out = stops[chosen];
     lastStopLineId = line.id;
     lastStopIndex = chosen;
+    return true;
+}
+
+bool selectDirection(const Line &line, Stop &stop) {
+    if (stop.directions.empty()) return true; // stop area display (RER): nothing to choose
+    int chosen = 0;
+    if (stop.directions.size() > 1) {
+        const String key = line.id + "|" + stop.name;
+        int start = 0;
+        for (size_t i = 0; i < stop.directions.size(); i++) {
+            const String &name = stop.directions[i].name;
+            if (name == stop.direction || (key == lastDirectionKey && name == lastDirectionName)) start = i;
+        }
+
+        chosen = -1;
+        std::vector<Option> options;
+        options.reserve(stop.directions.size());
+        for (size_t i = 0; i < stop.directions.size(); i++) {
+            options.emplace_back(
+                "Direction " + toAscii(stop.directions[i].name),
+                [&chosen, i]() { chosen = (int)i; },
+                false,
+                lineHeaderHover,
+                const_cast<Line *>(&line)
+            );
+        }
+        // Regular list: branched lines have long labels ("Direction Saint-Denis - Universite /
+        // Asnieres - Gennevilliers - Les Courtilles"), scrolled by the marquee of this menu type.
+        loopOptions(options, MENU_TYPE_REGULAR, "", start);
+        if (chosen < 0) return false;
+        lastDirectionKey = key;
+        lastDirectionName = stop.directions[chosen].name;
+    }
+    stop.direction = stop.directions[chosen].name;
+    stop.monitoringRef = stop.directions[chosen].monitoringRef;
     return true;
 }
