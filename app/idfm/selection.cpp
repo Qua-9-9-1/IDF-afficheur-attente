@@ -5,6 +5,9 @@
 #include "referential.h"
 #include <globals.h>
 
+#include <algorithm>
+#include <string.h>
+
 namespace {
 
 // Display label of a transport mode (menu titles).
@@ -79,39 +82,77 @@ String toAscii(const String &in) {
     return out;
 }
 
-// Draws the line pictogram ("RER [A]") centred in the top bar, between clock and battery.
+// What the user is choosing in the stop list, shown next to the line pictogram.
+const char *stopKindLabel(TransportMode mode) {
+    switch (mode) {
+        case TransportMode::Rer:
+        case TransportMode::Transilien: return "Gare de depart";
+        case TransportMode::Bus: return "Arret de depart";
+        default: return "Station de depart";
+    }
+}
+
+// Draws the line pictogram ("RER [A]") centred in the top bar, between clock and battery,
+// optionally followed by `label` ("Gare de depart"...). With a label the mode name is left out
+// to keep the header narrow (the pictogram already identifies the line).
 // Must stay above y=20: MENU_TYPE_REGULAR draws its 6-row box from there on a 170 px screen.
-void drawLineHeader(const Line &line) {
+void drawLineHeader(const Line &line, const char *label = nullptr) {
     const int y = 7;
     const int h = 12;
-    String mode = modeLabel(line.mode);
+    String mode = label ? String() : String(modeLabel(line.mode));
+    String text = label ? String(label) : String();
     String name = toAscii(line.shortName);
     tft.setTextSize(1);
-    int modeW = mode.length() * LW;
+    int modeW = mode.length() ? mode.length() * LW + 4 : 0;
     int pillW = name.length() * LW + 8;
-    int x = (tftWidth - modeW - 4 - pillW) / 2;
+    int textW = text.length() ? 4 + text.length() * LW : 0;
+    int x = (tftWidth - modeW - pillW - textW) / 2;
 
-    tft.fillRect(x - 2, y, modeW + 4 + pillW + 4, h, bruceConfig.bgColor);
+    tft.fillRect(x - 2, y, modeW + pillW + textW + 4, h, bruceConfig.bgColor);
     tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
-    tft.drawString(mode, x, y + 2);
-    x += modeW + 4;
+    if (modeW) tft.drawString(mode, x, y + 2);
+    x += modeW;
     // RER: square-ish pictogram; metro: round roundel (pill for "3B", "10"...).
     tft.fillRoundRect(x, y, pillW, h, line.mode == TransportMode::Metro ? h / 2 : 3, line.color);
     tft.setTextColor(line.textColor, line.color);
     tft.drawString(name, x + 4, y + 2);
+    if (textW) {
+        tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+        tft.drawString(text, x + pillW + 4, y + 2);
+    }
 }
 
 // loopOptions hover hook: draws the line header (pointer = the Line), then lets loopOptions draw
-// the menu. Used by the line menu (header of the hovered line), the stop and direction lists.
+// the menu. Used by the line menu (header of the hovered line).
 bool lineHeaderHover(void *ptr, bool shouldRender) {
     if (shouldRender && ptr != nullptr) drawLineHeader(*static_cast<const Line *>(ptr));
     return false;
 }
 
+// Header of the stop and direction lists: line pictogram + what is being chosen.
+struct LabeledHeader {
+    const Line *line;
+    const char *label;
+};
+bool labeledHeaderHover(void *ptr, bool shouldRender) {
+    if (shouldRender && ptr != nullptr) {
+        const LabeledHeader *h = static_cast<const LabeledHeader *>(ptr);
+        drawLineHeader(*h->line, h->label);
+    }
+    return false;
+}
+
+// Sort key of a stop name: ASCII, lower case (alphabetical order ignoring accents and case).
+String sortKey(const String &name) {
+    String k = toAscii(name);
+    k.toLowerCase();
+    return k;
+}
+
 // Remember the last choice to reopen the menus where the user left them.
 String lastLineId;
 String lastStopLineId;
-int lastStopIndex = 0;
+String lastStopName; // by name: the list is sorted alphabetically, not in route order
 String lastDirectionKey;  // line id + stop name of the last direction choice
 String lastDirectionName;
 
@@ -259,19 +300,32 @@ bool selectStop(const Line &line, Stop &out) {
         return false;
     }
 
-    int start = 0;
-    if (lastStopLineId == line.id && lastStopIndex < (int)stops.size()) start = lastStopIndex;
+    // Alphabetical order (accents and case ignored): easier to find a stop with the encoder
+    // than the route order.
+    std::vector<String> keys;
+    keys.reserve(stops.size());
+    for (const Stop &s : stops) keys.push_back(sortKey(s.name));
+    std::vector<size_t> order(stops.size());
+    for (size_t i = 0; i < order.size(); i++) order[i] = i;
+    std::stable_sort(order.begin(), order.end(), [&keys](size_t a, size_t b) {
+        return strcmp(keys[a].c_str(), keys[b].c_str()) < 0;
+    });
 
+    int start = 0;
+    if (lastStopLineId == line.id) {
+        for (size_t i = 0; i < order.size(); i++) {
+            if (stops[order[i]].name == lastStopName) start = (int)i;
+        }
+    }
+
+    LabeledHeader header = {&line, stopKindLabel(line.mode)};
     int chosen = -1;
     std::vector<Option> options;
     options.reserve(stops.size());
-    for (size_t i = 0; i < stops.size(); i++) {
+    for (size_t i = 0; i < order.size(); i++) {
+        const size_t idx = order[i];
         options.emplace_back(
-            toAscii(stops[i].name),
-            [&chosen, i]() { chosen = (int)i; },
-            false,
-            lineHeaderHover,
-            const_cast<Line *>(&line)
+            toAscii(stops[idx].name), [&chosen, idx]() { chosen = (int)idx; }, false, labeledHeaderHover, &header
         );
     }
     // MENU_TYPE_REGULAR: 6 visible rows with a scrolling window and marquee for long names,
@@ -281,7 +335,7 @@ bool selectStop(const Line &line, Stop &out) {
     if (chosen < 0) return false;
     out = stops[chosen];
     lastStopLineId = line.id;
-    lastStopIndex = chosen;
+    lastStopName = out.name;
     return true;
 }
 
@@ -297,6 +351,7 @@ bool selectDirection(const Line &line, Stop &stop) {
         }
 
         chosen = -1;
+        LabeledHeader header = {&line, "Direction"};
         std::vector<Option> options;
         options.reserve(stop.directions.size());
         for (size_t i = 0; i < stop.directions.size(); i++) {
@@ -304,8 +359,8 @@ bool selectDirection(const Line &line, Stop &stop) {
                 "Direction " + toAscii(stop.directions[i].name),
                 [&chosen, i]() { chosen = (int)i; },
                 false,
-                lineHeaderHover,
-                const_cast<Line *>(&line)
+                labeledHeaderHover,
+                &header
             );
         }
         // Regular list: branched lines have long labels ("Direction Saint-Denis - Universite /
