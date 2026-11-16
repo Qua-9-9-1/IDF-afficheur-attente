@@ -472,8 +472,9 @@ void drawTimeArea(TFT_eSPI &g, const RowSlot &row, const TimeLayout &t, bool bli
         drawText(g, t.big, x0, by, t.size, t.color);
         drawText(g, t.unit, x0 + textW(t.big, t.size) + 3, by + 14, 1, t.color);
     } else if (t.line2.length()) {
-        drawText(g, t.big, kW - kMargin - textW(t.big, t.size), row.y + 3, t.size, t.color);
-        drawText(g, t.line2, kW - kMargin - textW(t.line2, t.size), row.y + 21, t.size, t.color);
+        // Two-line label ("à l'" / "approche"): one left-aligned block reads as a single phrase.
+        drawText(g, t.big, x0, row.y + 3, t.size, t.color);
+        drawText(g, t.line2, x0, row.y + 21, t.size, t.color);
     } else {
         drawText(g, t.big, kW - kMargin - textW(t.big, t.size), row.y + 12, t.size, t.color);
     }
@@ -714,6 +715,7 @@ static time_t demoNow() {
 }
 
 void rerBoardDemo() {
+    primEnsureTime(); // real clock when Wi-Fi is up (no-op otherwise)
     const time_t t0 = demoNow();
 
     BoardData data;

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IDFM Board simulateur</title>
+  <style>
+    :root {
+      --bg: #f3f4f6; --panel: #ffffff; --text: #1f2937; --muted: #6b7280; --border: #d1d5db;
+      --device: #1f2933; --device-edge: #0f1720; --accent: #2563eb; --log-bg: #f9fafb;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111418; --panel: #1a1f26; --text: #e5e7eb; --muted: #9ca3af; --border: #2d3540;
+        --device: #2a323d; --device-edge: #0b0f14; --accent: #60a5fa; --log-bg: #141920;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, sans-serif; }
+    main { max-width: 1040px; margin: 0 auto; padding: 20px 16px 32px; display: grid; gap: 16px; }
+    header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; }
+    h1 { font-size: 18px; margin: 0; }
+    nav a { color: var(--accent); margin-right: 12px; text-decoration: none; }
+    nav a[aria-current="page"] { font-weight: 600; text-decoration: underline; }
+    .device {
+      justify-self: center; background: var(--device); border: 2px solid var(--device-edge);
+      border-radius: 18px; padding: 18px; display: flex; gap: 18px; align-items: center;
+      max-width: 100%; box-shadow: 0 6px 24px rgba(0,0,0,.25);
+    }
+    canvas {
+      display: block; width: 960px; max-width: calc(100vw - 150px); aspect-ratio: 320 / 170; height: auto;
+      image-rendering: pixelated; background: #000; border-radius: 4px; outline: none;
+    }
+    .controls { display: grid; gap: 10px; justify-items: center; }
+    .controls button {
+      width: 56px; height: 40px; border-radius: 10px; border: 1px solid var(--device-edge);
+      background: #3b4552; color: #fff; font-size: 16px; cursor: pointer;
+    }
+    .controls button.knob { width: 56px; height: 56px; border-radius: 50%; background: #4b5563; }
+    .controls button:active { transform: translateY(1px); background: #566173; }
+    .status { font-size: 13px; color: var(--muted); text-align: center; min-height: 1.4em; }
+    .help, .log { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+    .help kbd { border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font-size: 12px; }
+    .help ul { margin: 6px 0 0; padding-left: 18px; }
+    .log h2 { font-size: 14px; margin: 0 0 6px; }
+    pre { margin: 0; max-height: 220px; overflow: auto; background: var(--log-bg); padding: 8px; border-radius: 6px; font-size: 12px; white-space: pre-wrap; word-break: break-word; }
+    .error { color: #dc2626; }
+    @media (max-width: 700px) {
+      .device { flex-direction: column; }
+      canvas { max-width: calc(100vw - 72px); }
+      .controls { grid-auto-flow: column; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>IDFM Board · simulateur</h1>
+    <nav>
+      <a href="/" id="nav-app">Application complète</a>
+      <a href="/?demo=1" id="nav-demo">Démo RER (hors ligne)</a>
+    </nav>
+  </header>
+
+  <div class="device">
+    <canvas id="screen" width="320" height="170" tabindex="0" aria-label="Écran 320×170 simulé"></canvas>
+    <div class="controls" aria-label="Encodeur">
+      <button id="btn-prev" title="Encodeur : précédent (←)">▲</button>
+      <button id="btn-sel" class="knob" title="Clic encodeur (Entrée)">●</button>
+      <button id="btn-next" title="Encodeur : suivant (→)">▼</button>
+      <button id="btn-esc" title="Retour (Échap)">↩</button>
+    </div>
+  </div>
+  <div class="status" id="status">Chargement…</div>
+
+  <section class="help">
+    <strong>Commandes</strong>
+    <ul>
+      <li>Encodeur : <kbd>←</kbd> <kbd>→</kbd> (ou <kbd>↑</kbd> <kbd>↓</kbd>, molette de la souris sur l'écran)</li>
+      <li>Clic encodeur : <kbd>Entrée</kbd> / <kbd>Espace</kbd> / clic gauche sur l'écran · Retour : <kbd>Échap</kbd> / clic droit</li>
+      <li>Capture PNG : <kbd>P</kbd> · Redémarrer : <kbd>R</kbd></li>
+      <li>Carte SD simulée = dossier <code>sd/</code> du dépôt. Clé PRIM dans <code>sd/idfm/config.json</code> (ignoré par git) ; elle reste côté serveur local.</li>
+    </ul>
+  </section>
+
+  <section class="log">
+    <h2>Journal (Serial)</h2>
+    <pre id="log"></pre>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
