@@ -10,11 +10,14 @@ Données : API PRIM d'Île-de-France Mobilités.
 
 ```powershell
 git clone --recurse-submodules <url> C:\dev\idfm   # chemin court : limite Windows de 260 caractères
-.\scripts\setup.ps1          # Python portable + PlatformIO dans .tools\ (rien sur la machine), récupère Bruce
-.\scripts\sim.ps1 -Demo      # simulateur dans le navigateur, sans appareil
-.\scripts\build.ps1          # compile le firmware Bruce avec l'app
-.\scripts\build.ps1 -Upload  # flashe la carte branchée en USB
+.\setup.cmd                  # Python portable + PlatformIO dans .tools\ (rien sur la machine), récupère Bruce
+.\sim.cmd -Demo              # simulateur dans le navigateur, sans appareil
+.\build.cmd                  # compile le firmware Bruce avec l'app
+.\build.cmd -Upload          # flashe la carte branchée en USB
 ```
+
+Les `.cmd` lancent `scripts\*.ps1` avec `-ExecutionPolicy Bypass` pour ce seul lancement :
+Windows bloque les scripts `.ps1` par défaut, et on ne modifie pas ce réglage de la machine.
 
 Tous les outils sont installés dans `.tools\` (ignoré par git) ; supprimer ce dossier
 désinstalle tout.

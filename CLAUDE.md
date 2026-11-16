@@ -74,14 +74,18 @@ de Bruce doit passer par un fichier dans `patches/`.
 ## Commandes
 
 ```powershell
-.\scripts\setup.ps1                 # une fois : Python portable, PlatformIO, sous-module Bruce
-.\scripts\build.ps1                 # intègre l'app et compile le firmware
-.\scripts\build.ps1 -Upload         # compile et flashe (USB)
-.\scripts\build.ps1 -Monitor        # moniteur série
-.\scripts\sim.ps1                   # simulateur navigateur (app complète)
-.\scripts\sim.ps1 -Demo             # simulateur, panneau RER de démo hors ligne
-.\scripts\sim.ps1 -Demo -Shot x.png -ExitAfter 3000   # capture sans fenêtre → .tools\sim\shots\
+.\setup.cmd                         # une fois : Python portable, PlatformIO, sous-module Bruce
+.\build.cmd                         # intègre l'app et compile le firmware
+.\build.cmd -Upload                 # compile et flashe (USB)
+.\build.cmd -Monitor                # moniteur série
+.\sim.cmd                           # simulateur navigateur (app complète)
+.\sim.cmd -Demo                     # simulateur, panneau RER de démo hors ligne
+.\sim.cmd -Demo -Shot x.png -ExitAfter 3000   # capture sans fenêtre → .tools\sim\shots\
 ```
+
+Les `.cmd` à la racine appellent `scripts\*.ps1` avec `-ExecutionPolicy Bypass` (portée : ce
+lancement seulement) car la politique Windows par défaut (« Restricted ») bloque les `.ps1` ;
+ne jamais modifier la politique d'exécution de la machine.
 
 Pièges connus de la toolchain Windows : voir la section dédiée de `docs/STATUS.md`.
 Le build firmware exige un dépôt à chemin court (limite 260 caractères), ex. `C:\dev\idfm`.
