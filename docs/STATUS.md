@@ -31,8 +31,9 @@ _Dernière mise à jour : 2026-11-16_
     branches), attente en minutes ambre, « à l'approche » clignotant, « à quai », « Supprimé »,
     « Service terminé » la nuit, bandeau INFO. Référence : `docs/reference/METRO.md`.
   - Helpers d'affichage partagés RER/métro : `board_common.*`.
-  - À vérifier avec une clé : `STIF:StopPoint:Q:463158:` (ligne 4 Châtelet → Porte de
-    Clignancourt) doit ne renvoyer que ce quai.
+  - **Vérifié en réel le 2026-11-16** (simulateur + clé PRIM) : `STIF:StopPoint:Q:463158:`
+    (ligne 4 Châtelet → Porte de Clignancourt) ne renvoie que les trains de ce quai ;
+    `general-message` fonctionne aussi.
 - **Simulateur navigateur** (`sim/`, `scripts/sim.ps1`) : le code `app/idfm` est compilé tel
   quel en WebAssembly (zig) avec des couches Arduino / TFT_eSPI / Bruce imitées ; même police
   GLCD que l'appareil → rendu du panneau identique au pixel près. Serveur Python local : carte SD
