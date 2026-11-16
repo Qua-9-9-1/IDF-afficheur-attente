@@ -52,8 +52,22 @@ $env:PLATFORMIO_WORKSPACE_DIR   = $Ws
 Get-ChildItem env: | Where-Object { $_.Name -match '^(MSYSTEM.*|MINGW_.*)$' } | ForEach-Object {
     Remove-Item "env:$($_.Name)"
 }
-# Bruce's build scripts call `pio` directly
-$env:PATH = (Join-Path $Root '.venv\Scripts') + ';' + $env:PATH
+# Bruce's build scripts call `pio` directly, but pio.exe can be blocked by local policy
+# ("Access is denied"): put a pio.cmd shim running `python -m platformio` first in PATH.
+$shim = Join-Path $Ws 'shim'
+New-Item -ItemType Directory -Force $shim | Out-Null
+Set-Content -Encoding ascii (Join-Path $shim 'pio.cmd') "@`"$Py`" -m platformio %*"
+$env:PATH = "$shim;" + (Join-Path $Root '.venv\Scripts') + ';' + $env:PATH
+
+# Bruce's patch.py weakens a symbol of libnet80211.a via `pio pkg exec`. If that call failed,
+# the original is left renamed to .old with the ".patched" flag set: redo it with objcopy.
+$fwLib   = Join-Path $env:USERPROFILE '.platformio\packages\framework-arduinoespressif32-libs\esp32s3\lib'
+$objcopy = Join-Path $env:USERPROFILE '.platformio\packages\toolchain-xtensa-esp-elf\bin\xtensa-esp32s3-elf-objcopy.exe'
+if ((Test-Path "$fwLib\libnet80211.a.old") -and -not (Test-Path "$fwLib\libnet80211.a") -and (Test-Path $objcopy)) {
+    & $objcopy --weaken-symbol=ieee80211_raw_frame_sanity_check "$fwLib\libnet80211.a.old" "$fwLib\libnet80211.a"
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to repair libnet80211.a' }
+    Write-Host '==> Repaired libnet80211.a (Bruce patch.py)'
+}
 
 # 1. Link our module into Bruce's source tree
 $link = Join-Path $Bruce 'src\modules\idfm'

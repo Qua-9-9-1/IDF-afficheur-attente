@@ -35,7 +35,11 @@ _Dernière mise à jour : 2026-11-10_
   `setup.ps1` l'encapsule.
 - **Variables MSYS/MinGW** héritées du terminal (Git Bash, Orca) : l'installeur ESP-IDF refuse
   de tourner → supprimées dans le script.
-- **`pio.exe` bloqué** (« Access denied ») : on lance `python -m platformio`.
+- **`pio.exe` bloqué** (« Access denied ») : on lance `python -m platformio`, et un shim
+  `pio.cmd` est mis en tête du PATH pour les scripts de Bruce qui appellent `pio` directement.
+- **`libnet80211.a` introuvable au link** : le `patch.py` de Bruce (via `pio pkg exec`) a échoué
+  à cause du blocage ci-dessus mais a renommé l'original en `.old` → `build.ps1` le régénère
+  avec `objcopy` si besoin.
 - **FastLED 3.10.9** casse la compilation (conflit avec `#define FP` de Bruce) → figé en 3.10.3
   par `patches/0002-pin-fastled-3.10.3.patch`.
 - Premier build ≈ 20 min (téléchargements + compilation complète) ; ensuite incrémental.
