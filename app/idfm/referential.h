@@ -40,3 +40,8 @@ bool idfmLoadLines(TransportMode mode, std::vector<Line> &out);
 // Returns true when the data comes from a file, false when the built-in fallback was used
 // (in that case `out` may be empty).
 bool idfmLoadStops(const Line &line, std::vector<Stop> &out);
+
+// Looks up one line by its bare id ("C01742") in the referential, any mode (used to name and
+// colour the lines of multi-line boards). Must stay cheap on the device even with ~1500 bus
+// lines (streamed/filtered parsing). Returns false if unknown.
+bool idfmFindLine(const String &lineId, Line &out);

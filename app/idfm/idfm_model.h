@@ -4,6 +4,7 @@
 //   - referential  (fills Line / Stop from the SD card referential)
 //   - board_rer    (renders BoardData like an official RER platform display)
 //   - board_metro  (renders BoardData like an official metro platform display)
+//   - board_transilien / board_tram / board_bus (same for the other modes)
 
 #include <Arduino.h>
 #include <time.h>
@@ -44,6 +45,7 @@ enum class DepartureStatus : uint8_t {
 
 struct Departure {
     String lineRef;      // "C01742" (bare id, without STIF:Line:: prefix)
+    String lineName;     // public line name from PRIM (PublishedLineName), e.g. "72" (may be empty)
     String mission;      // RER mission code from JourneyNote, e.g. "ZEUS" (may be empty)
     String trainNumber;  // e.g. "ZEUS12" (may be empty)
     String destination;  // display name of the terminus
@@ -54,8 +56,11 @@ struct Departure {
 };
 
 struct BoardData {
-    Line line;
+    Line line;  // line chosen by the user (multi-line boards: used for the header only)
     Stop stop;
+    // Multi-line boards (bus shelters show every line of the stop): line info (name, colours) of
+    // the lines present in `departures`, filled by the app via idfmFindLine(). Empty otherwise.
+    std::vector<Line> lines;
     std::vector<Departure> departures; // sorted by expected (or aimed) time
     time_t fetchedAt = 0;              // UTC epoch of the successful fetch
     String error;                      // non-empty when the last fetch failed

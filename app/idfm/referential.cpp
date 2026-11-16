@@ -257,3 +257,21 @@ bool idfmLoadStops(const Line &line, std::vector<Stop> &out) {
     }
     return false;
 }
+
+
+// Simple version: scans the lines of every mode. TODO (bus referential): streamed lookup.
+bool idfmFindLine(const String &lineId, Line &out) {
+    const TransportMode modes[] = {TransportMode::Metro, TransportMode::Rer, TransportMode::Transilien,
+                                   TransportMode::Tram, TransportMode::Bus};
+    for (TransportMode m : modes) {
+        std::vector<Line> lines;
+        idfmLoadLines(m, lines);
+        for (const Line &l : lines) {
+            if (l.id == lineId) {
+                out = l;
+                return true;
+            }
+        }
+    }
+    return false;
+}

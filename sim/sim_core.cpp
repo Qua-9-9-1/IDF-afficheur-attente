@@ -1,7 +1,7 @@
 // Simulator core: Arduino / Bruce API used by the IDFM app, implemented on top of the platform
 // backend (sim_backend.h). The app sources in app/idfm are compiled unchanged.
 //
-// Arguments: [--demo rer|metro] [--keys "s,w,n,s"] [--exit-after ms]
+// Arguments: [--demo rer|metro|transilien|tram|bus] [--keys "s,w,n,s"] [--exit-after ms]
 //   --keys: scripted encoder, n=next p=prev s=click e=back w=wait (one step every 450 ms)
 
 #include "sim_backend.h"
@@ -323,11 +323,19 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (demo == "metro") {
-        metroBoardDemo();
-    } else if (!demo.empty()) {
-        rerBoardDemo();
-    } else {
+    // Live demos (real API data, offline sample data without a key), see idfmLiveDemo()
+    static const std::pair<const char *, TransportMode> kDemos[] = {
+        {"rer", TransportMode::Rer},   {"metro", TransportMode::Metro}, {"transilien", TransportMode::Transilien},
+        {"tram", TransportMode::Tram}, {"bus", TransportMode::Bus},
+    };
+    bool demoRun = false;
+    for (auto &d : kDemos) {
+        if (demo == d.first) {
+            idfmLiveDemo(d.second);
+            demoRun = true;
+        }
+    }
+    if (!demoRun) {
         while (!g_quitRequested) idfm_setup();
     }
     presentNow();

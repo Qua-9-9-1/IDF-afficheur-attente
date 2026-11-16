@@ -348,6 +348,7 @@ void buildDeparturesFilter(JsonDocument &filter) {
     delivery["ErrorCondition"] = true;
     JsonObject mvj = delivery["MonitoredStopVisit"][0]["MonitoredVehicleJourney"].to<JsonObject>();
     mvj["LineRef"] = true;
+    mvj["PublishedLineName"] = true;
     mvj["DestinationName"] = true;
     mvj["JourneyNote"] = true;
     mvj["TrainNumbers"] = true;
@@ -394,6 +395,7 @@ bool parseVisit(JsonObjectConst mvj, const String &lineId, time_t now, Departure
     bool atStop = call["VehicleAtStop"] | false;
 
     d.lineRef = lineRef;
+    d.lineName = siriText(mvj["PublishedLineName"]);
     d.destination = siriText(mvj["DestinationName"]);
     if (d.destination.isEmpty()) d.destination = siriText(call["DestinationDisplay"]);
     d.mission = siriText(mvj["JourneyNote"]);
@@ -448,7 +450,8 @@ bool primLoadConfig() {
         return false;
     }
     int refresh = doc["refreshSeconds"] | 60;
-    s_refreshSeconds = static_cast<uint16_t>(std::max(15, std::min(3600, refresh)));
+    // Short checks are the intended use: 10 s minimum (each refresh = 1 API request).
+    s_refreshSeconds = static_cast<uint16_t>(std::max(10, std::min(3600, refresh)));
     s_apiKey = key;
     s_configLoaded = true;
     return true;

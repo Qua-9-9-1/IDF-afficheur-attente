@@ -16,7 +16,7 @@
 #>
 param(
     [switch]$Demo,
-    [ValidateSet('rer', 'metro')][string]$Board = 'rer', # which demo board with -Demo
+    [ValidateSet('rer', 'metro', 'transilien', 'tram', 'bus')][string]$Board = 'rer', # live demo with -Demo
     [string]$Keys,
     [int]$Port = 8765,
     [string]$Shot,

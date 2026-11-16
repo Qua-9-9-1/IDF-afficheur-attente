@@ -25,7 +25,7 @@ bool primHasConfig();
 // API key ("apiKey"). Empty if not loaded. Never log it.
 const String &primApiKey();
 
-// Board refresh period ("refreshSeconds"), clamped to [15, 3600]. Default 60.
+// Board refresh period ("refreshSeconds"), clamped to [10, 3600]. Default 60.
 uint16_t primRefreshSeconds();
 
 // Human readable reason of the last primLoadConfig() failure (French, short).
@@ -36,7 +36,7 @@ const String &primConfigError();
 // ---------------------------------------------------------------------------
 
 // Maximum number of departures kept in BoardData::departures.
-#define PRIM_MAX_DEPARTURES 10
+#define PRIM_MAX_DEPARTURES 20
 
 // Fetches the next departures of `line` at `stop`.
 // On success: out.departures is replaced (filtered on line.id, sorted by time,
