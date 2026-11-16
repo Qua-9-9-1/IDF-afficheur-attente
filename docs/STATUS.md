@@ -1,11 +1,26 @@
 # État d'avancement
 
-_Dernière mise à jour : 2026-11-10_
+_Dernière mise à jour : 2026-11-16_
 
 ## Fait
 - Initialisation du dépôt : consignes IA (`CLAUDE.md`), README, `.gitignore`.
 - Sous-module Bruce + scripts de toolchain (`scripts/setup.ps1`, `scripts/build.ps1`).
+  Toolchain validée : le firmware complet compile (branche `feature-bruce-sdk-toolchain`).
 - Squelette de l'app `app/idfm` branché dans le menu « Others » de Bruce via `patches/`.
+- **RER (branche `feature/rer-board`) — compile, pas encore testé sur l'appareil :**
+  - `idfm_model.h` : modèle commun (ligne, arrêt, départ, données du panneau).
+  - `prim_client.*` : config SD, `stop-monitoring` + `general-message`, parsing ArduinoJson
+    filtré, horloge UTC propre au module (NTP privé, l'horloge de Bruce n'est pas touchée),
+    données fictives. Détails : `docs/IDFM_API.md`.
+  - `referential.*` + `scripts/gen_referential.py` : lignes/arrêts RER générés depuis l'open
+    data IDFM (GTFS pour l'ordre) → `sd/idfm/*.json` ; repli intégré si la SD est absente.
+    Détails : `docs/REFERENTIEL.md`.
+  - `selection.*` : écrans ligne → arrêt (`loopOptions`).
+  - `board_rer.*` : rendu du panneau RER 320×170 (3 trains, code mission, attente en min,
+    « à quai » / « à l'approche » clignotants, bandeau d'infos défilant). Référence de design :
+    `docs/reference/RER.md`.
+  - `idfm_app.cpp` : flux mode → ligne → arrêt → panneau (encodeur = défilement,
+    clic = rafraîchir, Échap = retour) + entrée « RER demo » hors ligne.
 
 ## Décisions
 | Sujet | Décision |
@@ -17,13 +32,14 @@ _Dernière mise à jour : 2026-11-10_
 | Licence | AGPL-3.0 (imposée par Bruce si on distribue le firmware) — à confirmer |
 
 ## À faire (prochaines étapes)
-1. **Utilisateur** : créer un compte PRIM et générer une clé API.
-2. Récolter des références visuelles des panneaux réels (photos) → `docs/reference/`.
-3. Client PRIM : requête `stop-monitoring`, parsing JSON (ArduinoJson filtré).
-4. Référentiel lignes/arrêts : choisir comment lister lignes et arrêts sur l'appareil
-   (API PRIM « référentiel » en ligne vs. fichier pré-généré sur la SD).
-5. Écrans de sélection (mode → ligne → arrêt) avec l'encodeur.
-6. Rendu des panneaux, mode par mode (métro en premier).
+1. **Utilisateur** : créer un compte PRIM et générer une clé API ; copier `sd/idfm/*` sur la
+   carte SD (`/idfm/`) avec `config.json` rempli.
+2. Flasher et tester sur l'appareil : démo RER, puis données réelles (essayer d'abord
+   `STIF:StopArea:SP:45102:` = Châtelet - Les Halles).
+3. Photos de vrais panneaux RER → `docs/reference/photos/` pour valider couleurs, en-tête,
+   règle « < 1 min » / bascule en HH:MM (points marqués « de mémoire » dans `RER.md`).
+4. Vérifier le quota PRIM réel (≈ 1000 req/jour ?) ; `refreshSeconds` par défaut passé à 90.
+5. Autres modes : métro, Transilien, tram, bus (le générateur gère déjà `--modes`).
 
 ## Pièges de la toolchain (déjà gérés par `scripts/build.ps1`)
 - **Chemins > 260 caractères** : build PlatformIO redirigé vers `%LOCALAPPDATA%\idfm\ws-<hash>`
