@@ -28,7 +28,8 @@ _Dernière mise à jour : 2026-11-16_
   mode → ligne → arrêt, message « config absente ». Les menus Bruce sont une approximation.
   Corrections trouvées grâce à lui : « à l'approche » mal aligné, horloge de la démo figée.
 - **Outils 100 % locaux au dépôt** (`.tools/`, `scripts/tools.ps1`) : Python portable (NuGet),
-  PlatformIO + toolchains, workspace de build, dépendances du simulateur.
+  PlatformIO + toolchains, workspace de build, dépendances du simulateur. Anciennes installations
+  machine supprimées le 2026-11-16 (`~/.platformio`, `%LOCALAPPDATA%\idfm`, Python 3.12 winget).
 
 ## Décisions
 | Sujet | Décision |
@@ -46,12 +47,10 @@ _Dernière mise à jour : 2026-11-16_
    essayer d'abord `STIF:StopArea:SP:45102:` = Châtelet - Les Halles.
 2. Valider le build firmware 100 % local depuis un dépôt à chemin court (`C:\dev\…`), puis
    flasher : copier `sd/idfm/*` sur la carte SD (`/idfm/`).
-3. Nettoyer les anciennes installations hors dépôt (avec accord) : `~/.platformio`,
-   `%LOCALAPPDATA%\idfm`, Python 3.12 installé par winget.
-4. Photos de vrais panneaux RER → `docs/reference/photos/` pour valider couleurs, en-tête,
+3. Photos de vrais panneaux RER → `docs/reference/photos/` pour valider couleurs, en-tête,
    règle « < 1 min » / bascule en HH:MM (points marqués « de mémoire » dans `RER.md`).
-5. Vérifier le quota PRIM réel (≈ 1000 req/jour ?) ; `refreshSeconds` par défaut passé à 90.
-6. Autres modes : métro, Transilien, tram, bus (le générateur gère déjà `--modes`).
+4. Vérifier le quota PRIM réel (≈ 1000 req/jour ?) ; `refreshSeconds` par défaut passé à 90.
+5. Autres modes : métro, Transilien, tram, bus (le générateur gère déjà `--modes`).
 
 ## Pièges de la toolchain (déjà gérés par `scripts/build.ps1`)
 - **Chemins > 260 caractères** : certains fichiers de bibliothèques sont à ~190 caractères sous
