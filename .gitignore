@@ -18,3 +18,6 @@ sd/idfm/config.json
 # OS
 Thumbs.db
 .DS_Store
+
+# Bus stop files (~7 MB, ~1900 files): regenerate with scripts/gen_referential.py --modes BUS
+sd/idfm/bus/

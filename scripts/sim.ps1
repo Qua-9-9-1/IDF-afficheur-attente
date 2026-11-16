@@ -6,7 +6,8 @@
 .EXAMPLE
     .\scripts\sim.ps1                 # full app: RER -> line -> stop -> live board
     .\scripts\sim.ps1 -Demo           # offline RER board with sample data
-    .\scripts\sim.ps1 -Demo -Board metro   # offline metro board with sample data
+    .\scripts\sim.ps1 -Demo -Board metro   # live metro demo (rer|metro|transilien|tram|bus)
+    .\scripts\sim.ps1 -Demo -Board bus -Offline   # same board on sample data, no API call
     .\scripts\sim.ps1 -Demo -Shot demo.png -ExitAfter 3000   # headless capture -> .tools\sim\shots\
     .\scripts\sim.ps1 -Keys "s,w,s"   # scripted encoder: n=next p=prev s=click e=back w=wait
 .NOTES
@@ -17,6 +18,7 @@
 param(
     [switch]$Demo,
     [ValidateSet('rer', 'metro', 'transilien', 'tram', 'bus')][string]$Board = 'rer', # live demo with -Demo
+    [switch]$Offline, # with -Demo: sample data, no API call
     [string]$Keys,
     [int]$Port = 8765,
     [string]$Shot,
@@ -68,6 +70,7 @@ if ($NoRun) { Write-Host "==> Built $Wasm"; exit 0 }
 # Page parameters
 $query = @()
 if ($Demo)      { $query += "demo=$Board" }
+if ($Offline)   { $query += 'offline=1' }
 if ($Keys)      { $query += 'keys=' + ($Keys -replace '[^npsew]', '') }
 if ($ExitAfter) { $query += "exit=$ExitAfter" }
 if ($Shot)      { $query += "shot=$Shot"; $query += 'quit=1' }
@@ -93,7 +96,7 @@ if (-not $edge) { throw 'Microsoft Edge not found (needed for -Shot)' }
 $srv = Start-Process -PassThru -NoNewWindow -FilePath $Py -ArgumentList @(
     "`"$server`"", '--wasm', "`"$Wasm`"", '--port', $Port, '--no-browser', '--quit-after-shot')
 Start-Sleep -Milliseconds 800
-$profileDir = Join-Path $SimDir 'edge-profile'
+$profileDir = Join-Path $SimDir "edge-profile-$Port" # one per port: parallel captures don't collide
 $browser = Start-Process -PassThru -FilePath $edge -ArgumentList @(
     '--headless=new', '--disable-gpu', '--no-first-run', "--user-data-dir=`"$profileDir`"",
     '--window-size=1100,900', "`"http://127.0.0.1:$Port/$qs`"")

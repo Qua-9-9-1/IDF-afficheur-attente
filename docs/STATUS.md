@@ -22,7 +22,7 @@ _Dernière mise à jour : 2026-11-16_
   - `idfm_app.cpp` : flux mode → ligne → arrêt → panneau (encodeur = défilement,
     clic = rafraîchir, Échap = retour) + entrée « RER demo » hors ligne.
 - **RER validé par l'utilisateur** dans le simulateur (2026-11-16).
-- **Métro (en simulateur, pas encore testé sur l'appareil ni avec l'API réelle)** :
+- **Métro (simulateur + API réelle, pas encore testé sur l'appareil)** :
   - Référentiel : 16 lignes (1–14, 3B, 7B), stations dans l'ordre, et pour chaque station les
     directions avec leur quai `STIF:StopPoint:Q:<id>:` (un panneau métro = un quai). Libellés
     des lignes à branches : terminus joints par « / ». Détails : `docs/REFERENTIEL.md`.
@@ -34,6 +34,20 @@ _Dernière mise à jour : 2026-11-16_
   - **Vérifié en réel le 2026-11-16** (simulateur + clé PRIM) : `STIF:StopPoint:Q:463158:`
     (ligne 4 Châtelet → Porte de Clignancourt) ne renvoie que les trains de ce quai ;
     `general-message` fonctionne aussi.
+- **Transilien, tram, bus (simulateur + API réelle le 2026-11-16, pas encore sur l'appareil)** :
+  - Transilien (H…V) : arrêts = zones `StopArea:SP`, pas de direction ; `board_transilien.*`
+    (heure de départ HH:MM, « dans N min », voie, mission, retard/supprimé). `docs/reference/TRANSILIEN.md`.
+  - Tram (T1…T14) : directions par quai `StopPoint:Q` (vérifié RATP, STRETTO, Keolis, RD Bièvre,
+    RATP Cap) ; `board_tram.*` ; `docs/reference/TRAM.md`. **T11 : aucune donnée temps réel**.
+  - Bus (1 858 lignes, Noctilien inclus) : menus par groupes de numéros ; direction = arrêt
+    physique `StopPoint:Q` ; le panneau affiche **toutes les lignes de l'arrêt** (requête sans
+    filtre de ligne), comme un abribus ; `board_bus.*` ; `docs/reference/BUS.md`.
+    Fichiers d'arrêts bus (~7 Mo) dans `sd/idfm/bus/`, **ignorés par git** : les régénérer avec
+    `.tools\python\tools\python.exe scripts\gen_referential.py --modes RER,METRO,TRANSILIEN,TRAM,BUS`.
+  - Démos **en direct** par mode (menu « Demos ») sur un arrêt prédéfini, repli sur données
+    fictives sans clé ; `sim.cmd -Demo -Board <mode> [-Offline]`.
+  - Client PRIM : rafraîchissement mini 10 s ; les véhicules terminus (heures d'arrivée seules)
+    ne sont plus listés comme départs ; « ô » affiché « o » (le glyphe ressemblait à un « 8 »).
 - **Simulateur navigateur** (`sim/`, `scripts/sim.ps1`) : le code `app/idfm` est compilé tel
   quel en WebAssembly (zig) avec des couches Arduino / TFT_eSPI / Bruce imitées ; même police
   GLCD que l'appareil → rendu du panneau identique au pixel près. Serveur Python local : carte SD

@@ -4,7 +4,7 @@
 #include "idfm_model.h"
 
 // Departures visible at once (bounds the encoder scrolling in idfm_app.cpp).
-#define TRANSILIEN_BOARD_ROWS 2
+#define TRANSILIEN_BOARD_ROWS 3
 
 // Draws the whole screen. now is UTC (primNow()); scrollOffset is the index of the first
 // departure (or line) shown, clamped by the renderer.

@@ -117,7 +117,110 @@ String lastDirectionName;
 
 } // namespace
 
+// Grouped line selection (bus, ~1900 lines): top-level groups ("20-99", "100-149", "1000-1999",
+// "Noctilien", "Autres"...) -> sub-groups when any ("1100-1199 Vexin") -> lines of the group.
+// Esc goes up one level; reopens directly on the last group's line list.
+int lastGroup = -1;
+TransportMode lastGroupMode = TransportMode::Metro;
+int lastTopIndex = 0;
+int lastSubIndex = 0;
+
+bool selectGroupedLine(TransportMode mode, const std::vector<LineGroup> &groups, Line &out) {
+    // Top-level entries: a group without parent, or a parent shared by several groups.
+    std::vector<String> tops;
+    std::vector<int> topGroup; // group index, -1 for a parent entry
+    for (size_t i = 0; i < groups.size(); i++) {
+        const String &label = groups[i].parent.isEmpty() ? groups[i].name : groups[i].parent;
+        bool seen = false;
+        for (const String &t : tops) seen = seen || t == label;
+        if (seen) continue;
+        tops.push_back(label);
+        topGroup.push_back(groups[i].parent.isEmpty() ? (int)i : -1);
+    }
+
+    int group = (lastGroupMode == mode && lastGroup < (int)groups.size()) ? lastGroup : -1;
+    String parent = group >= 0 ? groups[group].parent : String();
+    const String title = modeLabel(mode);
+    while (true) {
+        if (group < 0 && parent.isEmpty()) { // level 1: top-level entries
+            int chosen = -1;
+            std::vector<Option> options;
+            options.reserve(tops.size());
+            for (size_t i = 0; i < tops.size(); i++) {
+                String label = toAscii(tops[i]);
+                if (topGroup[i] < 0) label += " >";
+                options.emplace_back(label, [&chosen, i]() { chosen = (int)i; });
+            }
+            loopOptions(options, MENU_TYPE_REGULAR, title.c_str(),
+                        lastTopIndex < (int)tops.size() ? lastTopIndex : 0);
+            if (chosen < 0) { // leaving the mode: next time, start from the top-level list
+                lastGroup = -1;
+                return false;
+            }
+            lastTopIndex = chosen;
+            if (topGroup[chosen] >= 0) group = topGroup[chosen];
+            else parent = tops[chosen];
+            continue;
+        }
+        if (group < 0) { // level 2: groups of `parent`
+            std::vector<int> subs;
+            for (size_t i = 0; i < groups.size(); i++) {
+                if (groups[i].parent == parent) subs.push_back((int)i);
+            }
+            int chosen = -1;
+            std::vector<Option> options;
+            options.reserve(subs.size());
+            int start = 0;
+            for (size_t i = 0; i < subs.size(); i++) {
+                if (subs[i] == lastGroup) start = (int)i;
+                options.emplace_back(toAscii(groups[subs[i]].name), [&chosen, i]() { chosen = (int)i; });
+            }
+            loopOptions(options, MENU_TYPE_REGULAR, toAscii(parent).c_str(), start);
+            if (chosen < 0) {
+                parent = "";
+                continue;
+            }
+            group = subs[chosen];
+            continue;
+        }
+        // level 3: lines of `group`
+        std::vector<Line> lines;
+        std::vector<String> labels;
+        if (!idfmLoadGroupLines(mode, group, lines, &labels) || lines.empty()) {
+            displayWarning("No line in this group", true);
+            group = -1;
+            continue;
+        }
+        int start = 0;
+        for (size_t i = 0; i < lines.size(); i++) {
+            if (lines[i].id == lastLineId) start = (int)i;
+        }
+        int chosen = -1;
+        std::vector<Option> options;
+        options.reserve(lines.size());
+        for (size_t i = 0; i < lines.size(); i++) {
+            String label = title + " " + toAscii(labels[i].isEmpty() ? lines[i].shortName : labels[i]);
+            options.emplace_back(label, [&chosen, i]() { chosen = (int)i; }, false, lineHeaderHover, &lines[i]);
+        }
+        loopOptions(options, MENU_TYPE_REGULAR, "", start);
+        if (chosen < 0) { // back to the group list this group came from
+            lastGroup = group;
+            lastGroupMode = mode;
+            group = -1;
+            continue;
+        }
+        out = lines[chosen];
+        lastLineId = out.id;
+        lastGroup = group;
+        lastGroupMode = mode;
+        return true;
+    }
+}
+
 bool selectLine(TransportMode mode, Line &out) {
+    std::vector<LineGroup> groups;
+    if (idfmLoadLineGroups(mode, groups)) return selectGroupedLine(mode, groups, out);
+
     std::vector<Line> lines;
     if (!idfmLoadLines(mode, lines)) Serial.println("[idfm] lines.json missing, built-in lines used");
     if (lines.empty()) {

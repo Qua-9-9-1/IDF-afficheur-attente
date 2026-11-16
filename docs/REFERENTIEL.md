@@ -88,6 +88,27 @@ ou `MonitoredCall.StopPointRef`, à comparer au `ref` de la direction), sinon su
 justement la liste de ces terminus, cf. plus bas). Ne pas se fier à `DirectionRef` seul : en
 SIRI c'est « aller/retour » sans garantie d'alignement avec `direction_id` du GTFS.
 
+### Récapitulatif par mode (vérifié en réel le 2026-11-16, ≈ 14 h)
+
+| Mode | `MonitoringRef` interrogé | Choix dans l'appli | Vérification en réel |
+|---|---|---|---|
+| RER | `STIF:StopArea:SP:<ZdA>:` | ligne → gare | ✅ |
+| Transilien (H J K L N P R U V) | `STIF:StopArea:SP:<ZdA>:` (comme le RER, pas de directions : un écran de gare liste tous les trains) | ligne → gare | ✅ Saint-Lazare `SP:58566` : 160 passages, lignes J, L **et TER** (filtrage par ligne côté client) |
+| Métro | `STIF:StopPoint:Q:<quai>:` | ligne → station → direction | ✅ `Q:463158` |
+| Tram (T1…T14) | `STIF:StopPoint:Q:<quai>:` (comme le métro) | ligne → station → direction | ✅ RATP T3a `Q:24117` (1 sens), STRETTO T4 `Q:471008`, Keolis T9 `Q:479008`, RD Bièvre T10 `Q:486840`, RATP Cap T12 `Q:486878` / T13 `Q:480908`, STRETTO T14 `Q:492418` ; ⚠ **T11 : aucune donnée** ni par quai (`Q:470688`, `Q:472986`) ni par zone (`SP:462335`) au moment du test |
+| Bus (≈ 1 860 lignes, Noctilien compris) | `STIF:StopPoint:Q:<poteau>:` **sans filtre de ligne** (l'écran d'abribus montre toutes les lignes du poteau) | groupe → ligne → arrêt → direction (= le poteau de ce côté de la rue) | ✅ `Q:27091` (72, réseau RATP Cap : 6 lignes renvoyées), `Q:463505` (482, Keolis Seine Orly), `Q:3958` (4201, TICE / Transdev) |
+
+Constats :
+- Les quais tram/bus renvoient bien **un seul sens** (T3a : uniquement *Pont du Garigliano* ; T9 :
+  uniquement *Porte de Choisy*). Sur une branche (T4 *Les Coquetiers*), le même quai sert les
+  deux terminus de branche (*Aulnay* et *Hôpital de Montfermeil*) : normal.
+- La réponse peut porter `STIF:StopPoint:BP:<id>:` au lieu de `Q:` dans `MonitoringRef` (T9,
+  TICE) : on interroge en `Q:`, ça fonctionne.
+- Au terminus, un quai renvoie aussi les arrivées (T13 *Saint-Cyr* : les deux destinations).
+- Un poteau de bus renvoie aussi les **autres lignes** qui s'y arrêtent (ex. 22 et 72 à
+  *Versailles - Exelmans*) : c'est voulu pour l'écran d'abribus ; les noms/couleurs viennent de
+  `idfmFindLine()`.
+
 > Remarque : l'exemple du modèle (`STIF:StopArea:SP:474151:`) utilise l'id de la **ZdC** de
 > Châtelet ; la doc PRIM accepte aussi les zones de correspondance. Le générateur produit
 > l'id de **ZdA** (`45102` pour Châtelet - Les Halles RER), plus précis (pas de bus/métro mêlés).
@@ -114,10 +135,11 @@ SIRI c'est « aller/retour » sans garantie d'alignement avec `direction_id` du 
    ou incohérence du référentiel) sont ignorés et signalés (option `--keep-unserved` pour les
    ajouter en fin de liste, triés alphabétiquement).
 
-## Directions du métro (`dirs`)
+## Directions du métro, du tram et du bus (`dirs`)
 
-Pour chaque ligne de métro (`PLATFORM_MODES` du générateur), chaque station reçoit la liste de
-ses directions, tirée des courses GTFS :
+Pour chaque ligne de métro, tram et bus (`PLATFORM_MODES` du générateur), chaque station / arrêt
+reçoit la liste de ses directions, tirée des courses GTFS (pour le bus, une direction = le
+poteau d'où partent les bus de ce sens) :
 
 1. Pour une station et un `direction_id`, on ne garde que les courses qui **partent** de la
    station (pas celles qui y terminent) : au terminus, il ne reste que la direction de départ.
@@ -131,7 +153,16 @@ ses directions, tirée des courses GTFS :
    ligne 7 *Place d'Italie*) sont ignorés, comme sur les plaques de quai. Noms = noms de ZdA.
 4. Si deux directions d'une même station portent le même nom (La Fourche), on ajoute
    « (depuis <terminus d'origine>) ».
-5. Ordre : `direction_id = 0` d'abord (le sens de lecture de la liste des stations), puis 1.
+5. Si les noms restent identiques (même sens, même origine, plusieurs quais utilisés en
+   alternance — terminus de tram à deux voies, gares routières), une seule direction est gardée,
+   sur la **zone d'arrêt** (`STIF:StopArea:SP:<ZdA>:`) : tous les départs sont listés. Cas
+   générés : T3a *Pont du Garigliano*, T4 *Hôpital de Montfermeil* / *Aulnay-sous-Bois*,
+   T5 *Marché de Saint-Denis*, T10 *La Croix de Berny*, T11 terminus, et 77 directions de bus.
+   (Aucun cas au métro : fichiers métro inchangés.)
+6. Ordre : `direction_id = 0` d'abord (le sens de lecture de la liste des stations), puis 1.
+
+Bus : 24 586 arrêts à 2 directions, 14 892 à 1 (lignes en boucle, sens uniques), 188 à 3–4,
+516 sans direction (arrêts où les bus ne font que terminer : `ref` de zone d'arrêt utilisé).
 
 Lignes à branches — exemples générés :
 
@@ -163,8 +194,45 @@ Le libellé du menu est « Direction <name> » ; les longs libellés défilent (
     {"name":"Bagneux - Lucie Aubrac","ref":"STIF:StopPoint:Q:22092:"}]}, ...]}
 ```
 
+```json
+// lines_bus.json (bus : fichier à part, lignes rangées en groupes de sélection)
+{"v":1,"generated":"2026-11-16","mode":"BUS","groups":[
+  {"name":"1-19","in":"","lines":[{"id":"C…","shortName":"1","color":"…","textColor":"…"}, ...]},
+  {"name":"20-99","in":"","lines":[ ..., {"id":"C01107","shortName":"72","color":"FF1400","textColor":"FFFFFF"},
+     {"id":"C…","shortName":"39","color":"…","textColor":"…","label":"39 Rive Droite"}, ...]},
+  {"name":"1100-1199 Vexin","in":"1000-1999","lines":[...]}, ...]}
+```
+
 Noms en UTF-8 (accents conservés) ; la translittération ASCII est faite sur l'appareil.
-Clés de mode : `METRO`, `RER`, `TRANSILIEN`, `TRAM`, `BUS`.
+Clés de mode : `METRO`, `RER`, `TRANSILIEN`, `TRAM`, `BUS`. `lines.json` ne contient plus de bus.
+
+### Lignes de bus retenues
+
+`referentiel-des-lignes` liste 2 063 lignes de bus actives. Sont écartées : le transport à la
+demande (`transportsubmode = demandAndResponseBus`, 130), les bus de remplacement SNCF
+(`networkname` RER / Transilien / TER, 24) et les autres « Remplacement … » (`route_long_name`
+du GTFS, 5), puis les lignes **sans aucune course GTFS** sur 30 jours (46 : lignes saisonnières,
+bus de substitution RATP « T1 », « ORLYVAL »…). Restent **1 858 lignes**, dont 59 Noctilien.
+
+### Groupes de sélection (encodeur rotatif, menus ≤ ~60 entrées)
+
+Depuis la renumérotation 2025, les numéros sont quasi uniques en Île-de-France (4 chiffres en
+grande couronne, les 2 premiers = le réseau) : on range donc par **numéro**, pas par réseau.
+
+1. Menu « Bus » (20 entrées) : `1-19`, `20-99` (Paris), `100-149`, `150-199`, `200-249`,
+   `250-299`, `300-399`, `400-499`, `500-599`, `600-699`, `700-799`, puis `1000-1999 >` …
+   `9000-9999 >` (un parent par millier), `Noctilien`, `Autres >`.
+2. Sous-menu d'un millier : une entrée par centaine, nommée avec son réseau principal
+   (≥ 60 % des lignes) : `1100-1199 Vexin`, `4500-4599 Cœur d'Essonne`… ; une centaine de plus de
+   60 lignes est coupée en deux (`6500-6549` / `6550-6599 Poissy - Les Mureaux`).
+   `Autres >` : lignes à nom (TVM, Tzen, lettres Paris-Saclay, navettes, « Soir »…) par réseau,
+   les réseaux de moins de 5 lignes ensemble dans `Divers`.
+3. Liste des lignes du groupe (≤ 60 ; la plus grosse : 64 pour `20-99`), « Bus 72 ». Les
+   homonymes d'un même groupe ont un `label` : `39 Rive Droite` / `39 Terres d'Envol`,
+   `Soir Franconville Sud`…
+
+Règles appliquées automatiquement par le générateur (`bus_groups`) : centaine coupée en deux
+au-delà de 60 lignes, Noctilien coupé `N1-N99` / `N100+` au-delà de 60.
 
 **Noms courts du métro** : ceux du jeu `referentiel-des-lignes` tels quels (`1`…`14`, **`3B`**
 et **`7B`** pour 3bis et 7bis — même graphie que le GTFS `route_short_name`). Le menu affiche
@@ -189,26 +257,49 @@ Génération du 2026-11-16 (`--modes RER,METRO`) — fichiers RER identiques à 
 
 Total : ≈ 92 Ko pour les 21 fichiers d'arrêts.
 
+Génération complète du 2026-11-16 (`--modes RER,METRO,TRANSILIEN,TRAM,BUS`) : fichiers RER et
+métro **identiques** à la génération précédente (seule la date de `lines.json` change).
+
+| Fichiers | Lignes | Taille |
+|---|---|---|
+| `lines.json` (RER, métro, Transilien, tram) | 45 | 3,9 Ko |
+| `lines_bus.json` (67 groupes) | 1 858 | 139 Ko |
+| Transilien `stops_*.json` (H 50 arrêts, J 54, K 10, L 36, N 35, P 32, R 24, U 11, V 7) | 9 | 16 Ko |
+| Tram `stops_*.json` (T1 37 arrêts … T14 5) | 15 | 57 Ko (≤ 7,5 Ko par ligne) |
+| Bus `bus/stops_*.json` | 1 858 | 7,1 Mo (moyenne 3,8 Ko, max 17,5 Ko) |
+| **Total `sd/idfm/`** | 1 907 fichiers | **7,0 Mo** |
+
+Les fichiers d'arrêts bus sont dans le sous-dossier `sd/idfm/bus/` (même chemin `/idfm/bus/` sur
+la carte SD), **ignoré par git** : trop volumineux pour être versionné à chaque régénération.
+Les régénérer avec `--modes RER,METRO,TRANSILIEN,TRAM,BUS` (≈ 1 min 30 avec le cache GTFS).
+
 ## Utilisation du générateur
 
 Avec le Python portable du dépôt (rien d'installé sur la machine) :
 
 ```powershell
-.\.tools\python\tools\python.exe scripts\gen_referential.py --modes RER,METRO   # contenu actuel de sd\idfm\
+# contenu actuel de sd\idfm\ :
+.\.tools\python\tools\python.exe scripts\gen_referential.py --modes RER,METRO,TRANSILIEN,TRAM,BUS
 .\.tools\python\tools\python.exe scripts\gen_referential.py                      # RER A-E seulement
 .\.tools\python\tools\python.exe scripts\gen_referential.py --lines A,B          # filtrer (nom court ou id)
 .\.tools\python\tools\python.exe scripts\gen_referential.py --gtfs C:\chemin\IDFM-gtfs.zip
+.\.tools\python\tools\python.exe scripts\gen_referential.py --modes BUS --verbose  # détail par ligne de bus
 ```
 
-⚠ `lines.json` ne contient que les modes demandés : toujours passer **`--modes RER,METRO`**
-(sinon les lignes de métro disparaissent du menu — le firmware retombe alors sur sa liste
-intégrée, sans les fichiers d'arrêts complets).
+⚠ `lines.json` ne contient que les modes demandés : toujours passer **les 5 modes** (sinon les
+lignes manquantes disparaissent du menu — le firmware retombe alors sur sa liste intégrée RER /
+métro). `lines_bus.json` n'est réécrit que si `BUS` est demandé. Les anciens `stops_*.json` ne
+sont jamais supprimés.
 
-Cache : `.tools\referential-cache` (24 h par défaut, `--max-age`, `--refresh`).
-Durée : ≈ 1 min une fois le GTFS en cache (lecture en flux de `stop_times.txt`).
-Le générateur signale les cas particuliers (quais multiples, directions dupliquées).
-Les directions (`dirs`) ne sont produites que pour `METRO` ; `TRAM` fonctionne sans `dirs`.
-Le mode `BUS` fonctionne mais produit ~1 900 fichiers : à filtrer avec `--lines`.
+Cache : `.tools\referential-cache` (24 h par défaut, `--max-age`, `--refresh`) ; nom de fichier
+= préfixe lisible + empreinte SHA-1 de la requête (l'ancien nom tronqué à 120 caractères faisait
+se confondre les requêtes des différents modes). `arrets-lignes` est téléchargé en entier
+(≈ 1 900 lignes ne tiennent pas dans une clause `where` d'URL) puis filtré localement.
+Durée : ≈ 1 min 30 pour les 5 modes une fois le GTFS en cache : `stop_times.txt` (8,4 M lignes)
+est lu en flux et chaque course est réduite dès sa dernière ligne (les lignes d'une course sont
+contiguës dans le GTFS IDFM ; repli plus gourmand en mémoire sinon), la mémoire reste faible.
+Le générateur signale les cas particuliers (quais multiples, directions dupliquées) ; pour le
+bus, seulement avec `--verbose`.
 
 ## Côté firmware
 
@@ -226,8 +317,30 @@ Le mode `BUS` fonctionne mais produit ~1 900 fichiers : à filtrer avec `--lines
   La Défense »…, rouvre sur la dernière direction choisie ; sans menu si `directions` est vide
   — RER, `stop` inchangé — ou n'a qu'une entrée — terminus, boucles —, appliquée d'office). Après
   le choix : `stop.direction` = nom, `stop.monitoringRef` = quai. Retour (`Esc`) → `false`.
+- Bus : `selectLine` passe par les groupes (`idfmLoadLineGroups` lit seulement les noms des
+  groupes, via un filtre ArduinoJson ; `idfmLoadGroupLines(mode, i, lines, &labels)` lit le
+  fichier **groupe par groupe** — les groupes précédents sont sautés par filtre — et ne garde que
+  le groupe voulu). Menus `MENU_TYPE_REGULAR` : groupes (`1000-1999 >` ouvre un sous-menu) →
+  lignes. `Esc` remonte d'un niveau ; au retour du panneau / de la liste d'arrêts, on revient
+  directement dans la liste de lignes du dernier groupe. `idfmLoadLines(Bus, …)` garde son API
+  (toutes les lignes, lues en flux).
+- `idfmFindLine(id, out)` (noms/couleurs des lignes d'un abribus) : recherche brute en flux de
+  `"id":"<id>"` (KMP, lecture par blocs de 512 o) dans `lines.json` puis `lines_bus.json`, arrêt
+  au premier résultat, seul l'objet trouvé est parsé ; mémoire constante (< 1 Ko). Repli sur
+  les lignes intégrées. Repose sur le format écrit par le générateur (JSON compact, objets ligne
+  plats commençant par `"id"`).
 
 ## Points ouverts
+
+- **T11** : aucune donnée temps réel observée (quai ou zone, 2026-11-16 ≈ 14 h). Le référentiel
+  utilise quand même les quais (comme T4/T14, même exploitant, qui répondent). À retester ; si la
+  ligne ne répond jamais par quai, passer T11 en zone d'arrêt.
+- Bus : l'ordre des arrêts est approximatif pour les lignes dont les deux sens empruntent des rues
+  différentes (ex. 72 le long des quais) : les arrêts d'un seul sens sont insérés en blocs.
+- Bus : 7 Mo et ~1 900 fichiers sur la SD (et dans git). Si c'est trop, `--lines` permet de
+  générer un sous-ensemble ; la sélection fonctionne avec n'importe quel sous-ensemble.
+- Taille mémoire sur l'appareil non mesurée : `lines_bus.json` est lu en flux, mais
+  `idfmLoadLines(Bus, …)` (utilisé par la démo) construit encore ~1 900 `Line` (~80 Ko).
 
 - Format `StopArea:SP:<ZdA>` non encore vérifié en réel (pas de clé PRIM) — à tester d'abord
   sur Châtelet - Les Halles (`STIF:StopArea:SP:45102:`) et comparer avec la ZdC `474151`.

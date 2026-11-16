@@ -310,11 +310,13 @@ String HTTPClient::header(const char *name) const {
 // Entry point
 // ===========================================================================
 int main(int argc, char **argv) {
-    std::string demo; // "", "rer" or "metro"
+    std::string demo; // "", "rer", "metro", "transilien", "tram", "bus"
+    bool offline = false;
     for (int i = 1; i < argc; i++) {
         std::string a = argv[i];
         auto next = [&]() { return i + 1 < argc ? std::string(argv[++i]) : std::string(); };
         if (a == "--demo") demo = next();
+        else if (a == "--offline") offline = true;
         else if (a == "--exit-after") g_exitAfterMs = (uint32_t)atoi(next().c_str());
         else if (a == "--keys") {
             for (char c : next())
@@ -331,7 +333,8 @@ int main(int argc, char **argv) {
     bool demoRun = false;
     for (auto &d : kDemos) {
         if (demo == d.first) {
-            idfmLiveDemo(d.second);
+            if (offline) idfmOfflineDemo(d.second);
+            else idfmLiveDemo(d.second);
             demoRun = true;
         }
     }

@@ -388,9 +388,12 @@ bool parseVisit(JsonObjectConst mvj, const String &lineId, time_t now, Departure
 
     time_t aimed = primParseIso8601(call["AimedDepartureTime"] | "");
     time_t expected = primParseIso8601(call["ExpectedDepartureTime"] | "");
-    if (!aimed && !expected) { // no departure info: fall back on arrival times
-        aimed = primParseIso8601(call["AimedArrivalTime"] | "");
-        expected = primParseIso8601(call["ExpectedArrivalTime"] | "");
+    if (!aimed && !expected) {
+        time_t arrAimed = primParseIso8601(call["AimedArrivalTime"] | "");
+        time_t arrExpected = primParseIso8601(call["ExpectedArrivalTime"] | "");
+        // Arrival times only: the vehicle terminates here (e.g. trains arriving at Paris
+        // Saint-Lazare). Departure boards do not show them.
+        if (arrAimed || arrExpected) return false;
     }
     bool atStop = call["VehicleAtStop"] | false;
 

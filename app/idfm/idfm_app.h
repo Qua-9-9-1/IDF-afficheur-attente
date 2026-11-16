@@ -8,3 +8,6 @@ void idfm_setup();
 // Live demo of a mode: a preset line / stop with real API data, or the offline sample data
 // when there is no API key or the preset is not in the referential.
 void idfmLiveDemo(TransportMode mode);
+
+// Offline demo of a mode on hard-coded sample data (no API call).
+void idfmOfflineDemo(TransportMode mode);

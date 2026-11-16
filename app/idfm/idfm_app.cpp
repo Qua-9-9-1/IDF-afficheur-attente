@@ -43,24 +43,25 @@ struct BoardRenderer {
     void (*release)();
     void (*sampleData)(BoardData &); // offline demo data (nullptr: the board has its own demo)
     void (*offlineDemo)();
-    uint8_t visibleRows; // departures shown at once, bounds the encoder scrolling
+    uint8_t visibleRows; // items shown at once, bounds the encoder scrolling
     bool allLines;       // multi-line board: query every line of the stop (bus shelters)
+    size_t (*itemCount)(); // scrollable items when they are not departures (nullptr: departures)
 };
 
 void rerSample(BoardData &out) { primMockDepartures(out); }
 
 const BoardRenderer &rendererFor(TransportMode mode) {
     static const BoardRenderer rer = {rerBoardDraw,    rerBoardTick, rerBoardRelease, rerSample,
-                                      rerBoardDemo,    RER_BOARD_ROWS, false};
+                                      rerBoardDemo,    RER_BOARD_ROWS, false, nullptr};
     static const BoardRenderer metro = {metroBoardDraw, metroBoardTick, metroBoardRelease, nullptr,
-                                        metroBoardDemo, 2,              false};
+                                        metroBoardDemo, 2,              false, nullptr};
     static const BoardRenderer transilien = {
         transilienBoardDraw, transilienBoardTick, transilienBoardRelease, transilienBoardSampleData,
-        transilienBoardDemo, TRANSILIEN_BOARD_ROWS, false};
+        transilienBoardDemo, TRANSILIEN_BOARD_ROWS, false, nullptr};
     static const BoardRenderer tram = {tramBoardDraw,    tramBoardTick, tramBoardRelease, tramBoardSampleData,
-                                       tramBoardDemo,    TRAM_BOARD_ROWS, false};
+                                       tramBoardDemo,    TRAM_BOARD_ROWS, false, nullptr};
     static const BoardRenderer bus = {busBoardDraw,    busBoardTick, busBoardRelease, busBoardSampleData,
-                                      busBoardDemo,    BUS_BOARD_ROWS, true};
+                                      busBoardDemo,    BUS_BOARD_ROWS, true, busBoardRowCount};
     switch (mode) {
         case TransportMode::Metro: return metro;
         case TransportMode::Transilien: return transilien;
@@ -126,7 +127,8 @@ void runBoard(const Line &line, const Stop &stop) {
 
         if (check(EscPress)) break;
         if (check(NextPress)) {
-            if (scroll + board.visibleRows < data.departures.size()) scroll++;
+            const size_t items = board.itemCount ? board.itemCount() : data.departures.size();
+            if (scroll + board.visibleRows < items) scroll++;
             board.draw(data, primNow(), scroll);
         } else if (check(PrevPress)) {
             if (scroll > 0) scroll--;
@@ -184,17 +186,30 @@ String folded(const String &s) {
 }
 
 // Resolves the preset against the referential. False when the line is unknown.
-bool resolvePreset(const DemoPreset &p, Line &line, Stop &stop) {
-    std::vector<Line> lines;
-    idfmLoadLines(p.mode, lines);
-    const String wanted = folded(p.line);
-    bool found = false;
+bool findPresetLine(const std::vector<Line> &lines, const String &wanted, Line &out) {
     for (const Line &l : lines) {
         if (folded(l.shortName) == wanted) {
-            line = l;
-            found = true;
-            break;
+            out = l;
+            return true;
         }
+    }
+    return false;
+}
+
+bool resolvePreset(const DemoPreset &p, Line &line, Stop &stop) {
+    const String wanted = folded(p.line);
+    bool found = false;
+    std::vector<LineGroup> groups; // bus: ~1900 lines, scan group by group (low memory)
+    if (idfmLoadLineGroups(p.mode, groups)) {
+        for (size_t i = 0; i < groups.size() && !found; i++) {
+            std::vector<Line> lines;
+            idfmLoadGroupLines(p.mode, (int)i, lines);
+            found = findPresetLine(lines, wanted, line);
+        }
+    } else {
+        std::vector<Line> lines;
+        idfmLoadLines(p.mode, lines);
+        found = findPresetLine(lines, wanted, line);
     }
     if (!found) return false;
 
@@ -236,6 +251,8 @@ void idfmLiveDemo(TransportMode mode) {
     }
     board.offlineDemo();
 }
+
+void idfmOfflineDemo(TransportMode mode) { rendererFor(mode).offlineDemo(); }
 
 void idfm_setup() {
     std::vector<Option> demos = {

@@ -89,6 +89,7 @@ for (const [id, bit] of [['btn-prev', KEY.PREV], ['btn-next', KEY.NEXT], ['btn-s
 // ---- program ----
 const args = ['idfm_sim'];
 if (demo) args.push('--demo', demo);
+if (demo && params.get('offline')) args.push('--offline');
 if (params.get('keys')) args.push('--keys', params.get('keys'));
 if (params.get('exit')) args.push('--exit-after', params.get('exit'));
 

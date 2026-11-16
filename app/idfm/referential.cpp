@@ -135,6 +135,120 @@ bool readJsonFile(const String &path, JsonDocument &doc) {
     return true;
 }
 
+// Buffered byte reader over a File: chunked reads (fast on the SD card), and an ArduinoJson
+// "custom reader" (read() + readBytes()) so big files can be parsed one element at a time.
+class BufferedReader {
+public:
+    explicit BufferedReader(File &file) : file_(file) {}
+    int read() {
+        if (pos_ >= len_) {
+            len_ = file_.readBytes(buf_, sizeof(buf_));
+            pos_ = 0;
+            if (len_ == 0) return -1;
+        }
+        return (uint8_t)buf_[pos_++];
+    }
+    size_t readBytes(char *out, size_t n) {
+        size_t k = 0;
+        for (int c; k < n && (c = read()) >= 0;) out[k++] = (char)c;
+        return k;
+    }
+    // Next non-blank character (consumed), -1 at the end of the file.
+    int nextToken() {
+        int c;
+        do { c = read(); } while (c == ' ' || c == '\n' || c == '\r' || c == '\t');
+        return c;
+    }
+    // Consumes the input up to and including `needle` (KMP: no false miss on partial matches).
+    // Returns false when the end of the file is reached first.
+    bool skipPast(const char *needle) {
+        const size_t n = strlen(needle);
+        if (n == 0 || n > 64) return false;
+        uint8_t fail[64];
+        fail[0] = 0;
+        for (size_t i = 1, k = 0; i < n; i++) {
+            while (k > 0 && needle[i] != needle[k]) k = fail[k - 1];
+            if (needle[i] == needle[k]) k++;
+            fail[i] = (uint8_t)k;
+        }
+        size_t matched = 0;
+        for (int c; (c = read()) >= 0;) {
+            while (matched > 0 && (char)c != needle[matched]) matched = fail[matched - 1];
+            if ((char)c == needle[matched]) matched++;
+            if (matched == n) return true;
+        }
+        return false;
+    }
+
+private:
+    File &file_;
+    char buf_[512];
+    size_t len_ = 0;
+    size_t pos_ = 0;
+};
+
+Line lineFromJson(JsonObjectConst obj, TransportMode mode) {
+    const char *id = obj["id"] | "";
+    Line line;
+    line.id = id;
+    line.shortName = obj["shortName"] | id;
+    line.color = idfmHexToRgb565(obj["color"] | "", kDefaultColor);
+    line.textColor = idfmHexToRgb565(obj["textColor"] | "", kDefaultTextColor);
+    line.mode = mode;
+    return line;
+}
+
+// Walks the "groups" array of /idfm/lines_bus.json one group at a time (the file holds ~1900
+// lines, ~140 KB: never loaded at once). For each group, `visit(index, group)` gets the group
+// parsed with `filter` and returns false to stop. Returns false when the file is missing/invalid.
+template <typename Visitor>
+bool forEachLineGroup(const JsonDocument &filter, Visitor visit) {
+    File file;
+    if (!openReferentialFile(IDFM_BUS_LINES_PATH, file)) return false;
+    BufferedReader in(file);
+    bool ok = in.skipPast("\"groups\":[");
+    for (int index = 0; ok; index++) {
+        JsonDocument group;
+        DeserializationError err =
+            deserializeJson(group, in, DeserializationOption::Filter(filter));
+        if (err) {
+            Serial.printf("[idfm] " IDFM_BUS_LINES_PATH ": JSON error %s\n", err.c_str());
+            ok = false;
+            break;
+        }
+        if (!visit(index, group.as<JsonObjectConst>())) break;
+        if (in.nextToken() != ',') break; // ']' (or end of file): last group
+    }
+    file.close();
+    return ok;
+}
+
+// Raw search of `"id":"<lineId>"` in a lines file written by gen_referential.py (compact JSON,
+// flat line objects starting with "id"): no JSON parsing until the line is found.
+bool findLineInFile(const char *path, const String &lineId, TransportMode defaultMode, Line &out) {
+    File file;
+    if (!openReferentialFile(path, file)) return false;
+    BufferedReader in(file);
+    const String needle = "\"id\":\"" + lineId + "\"";
+    bool found = false;
+    if (in.skipPast(needle.c_str())) {
+        String obj = "{" + needle;
+        for (int c; obj.length() < 400 && (c = in.read()) >= 0;) {
+            obj += (char)c;
+            if (c == '}') break;
+        }
+        JsonDocument doc;
+        if (!deserializeJson(doc, obj)) {
+            TransportMode mode = defaultMode;
+            idfmParseModeKey(doc["mode"] | "", mode);
+            out = lineFromJson(doc.as<JsonObjectConst>(), mode);
+            found = true;
+        }
+    }
+    file.close();
+    return found;
+}
+
 void loadBuiltinLines(TransportMode mode, std::vector<Line> &out) {
     for (const BuiltinLine &b : kBuiltinLines) {
         if (b.mode != mode) continue;
@@ -190,28 +304,90 @@ bool idfmLoadLines(TransportMode mode, std::vector<Line> &out) {
         for (JsonObject obj : doc["lines"].as<JsonArray>()) {
             TransportMode lineMode;
             if (!idfmParseModeKey(obj["mode"] | "", lineMode) || lineMode != mode) continue;
-            const char *id = obj["id"] | "";
-            if (*id == '\0') continue;
-            Line line;
-            line.id = id;
-            line.shortName = obj["shortName"] | id;
-            line.color = idfmHexToRgb565(obj["color"] | "", kDefaultColor);
-            line.textColor = idfmHexToRgb565(obj["textColor"] | "", kDefaultTextColor);
-            line.mode = lineMode;
-            out.push_back(line);
+            if (*(obj["id"] | "") == '\0') continue;
+            out.push_back(lineFromJson(obj, lineMode));
         }
-        // A file without any line of this mode (e.g. generated for other modes only)
-        // falls back to the built-in list, so the RER menu always works.
-        if (!out.empty()) return true;
     }
+    if (mode == TransportMode::Bus) {
+        // Bus lines live in their own grouped file (streamed: ~1900 lines).
+        JsonDocument filter;
+        filter["lines"][0]["id"] = true;
+        filter["lines"][0]["shortName"] = true;
+        filter["lines"][0]["color"] = true;
+        filter["lines"][0]["textColor"] = true;
+        forEachLineGroup(filter, [&out](int, JsonObjectConst group) {
+            for (JsonObjectConst obj : group["lines"].as<JsonArrayConst>()) {
+                if (*(obj["id"] | "") != '\0') out.push_back(lineFromJson(obj, TransportMode::Bus));
+            }
+            return true;
+        });
+    }
+    // A file without any line of this mode (e.g. generated for other modes only)
+    // falls back to the built-in list, so the RER menu always works.
+    if (!out.empty()) return true;
     loadBuiltinLines(mode, out);
     return false;
+}
+
+bool idfmLoadLineGroups(TransportMode mode, std::vector<LineGroup> &out) {
+    out.clear();
+    if (mode != TransportMode::Bus) return false;
+    JsonDocument filter;
+    filter["name"] = true;
+    filter["in"] = true;
+    forEachLineGroup(filter, [&out](int, JsonObjectConst group) {
+        LineGroup g;
+        g.name = group["name"] | "";
+        g.parent = group["in"] | "";
+        out.push_back(g);
+        return true;
+    });
+    return !out.empty();
+}
+
+bool idfmLoadGroupLines(TransportMode mode, int group, std::vector<Line> &out, std::vector<String> *labels) {
+    out.clear();
+    if (labels) labels->clear();
+    if (mode != TransportMode::Bus || group < 0) return false;
+    // Groups before the wanted one are parsed with a names-only filter (their lines are skipped
+    // without being stored), the wanted one in full (<= ~60 lines).
+    JsonDocument skip;
+    skip["name"] = true;
+    bool found = false;
+    File file;
+    if (!openReferentialFile(IDFM_BUS_LINES_PATH, file)) return false;
+    BufferedReader in(file);
+    bool ok = in.skipPast("\"groups\":[");
+    for (int index = 0; ok && index <= group; index++) {
+        JsonDocument doc;
+        DeserializationError err = index == group
+                                       ? deserializeJson(doc, in)
+                                       : deserializeJson(doc, in, DeserializationOption::Filter(skip));
+        if (err) {
+            Serial.printf("[idfm] " IDFM_BUS_LINES_PATH ": JSON error %s\n", err.c_str());
+            break;
+        }
+        if (index == group) {
+            for (JsonObjectConst obj : doc["lines"].as<JsonArrayConst>()) {
+                if (*(obj["id"] | "") == '\0') continue;
+                out.push_back(lineFromJson(obj, TransportMode::Bus));
+                if (labels) labels->push_back(obj["label"] | "");
+            }
+            found = !out.empty();
+            break;
+        }
+        ok = in.nextToken() == ',';
+    }
+    file.close();
+    return found;
 }
 
 bool idfmLoadStops(const Line &line, std::vector<Stop> &out) {
     out.clear();
     JsonDocument doc;
-    if (readJsonFile(String(IDFM_REFERENTIAL_DIR "/stops_") + line.id + ".json", doc)) {
+    // Bus stop files live in a sub-directory (see stops_path() in scripts/gen_referential.py).
+    const String dir = line.mode == TransportMode::Bus ? IDFM_REFERENTIAL_DIR "/bus" : IDFM_REFERENTIAL_DIR;
+    if (readJsonFile(dir + "/stops_" + line.id + ".json", doc)) {
         JsonArray stops = doc["stops"].as<JsonArray>();
         out.reserve(stops.size());
         for (JsonObject obj : stops) {
@@ -259,19 +435,20 @@ bool idfmLoadStops(const Line &line, std::vector<Stop> &out) {
 }
 
 
-// Simple version: scans the lines of every mode. TODO (bus referential): streamed lookup.
+// Streamed raw search, early exit: lines.json (~4 KB) then lines_bus.json (~140 KB), only the
+// matching line object is parsed; memory use is constant. Built-in lines when the files are absent.
 bool idfmFindLine(const String &lineId, Line &out) {
-    const TransportMode modes[] = {TransportMode::Metro, TransportMode::Rer, TransportMode::Transilien,
-                                   TransportMode::Tram, TransportMode::Bus};
-    for (TransportMode m : modes) {
-        std::vector<Line> lines;
-        idfmLoadLines(m, lines);
-        for (const Line &l : lines) {
-            if (l.id == lineId) {
-                out = l;
-                return true;
-            }
-        }
+    if (lineId.isEmpty() || lineId.indexOf('"') >= 0) return false;
+    if (findLineInFile(IDFM_REFERENTIAL_DIR "/lines.json", lineId, TransportMode::Rer, out)) return true;
+    if (findLineInFile(IDFM_BUS_LINES_PATH, lineId, TransportMode::Bus, out)) return true;
+    for (const BuiltinLine &b : kBuiltinLines) {
+        if (lineId != b.id) continue;
+        out.id = b.id;
+        out.shortName = b.shortName;
+        out.color = idfmHexToRgb565(b.color, kDefaultColor);
+        out.textColor = idfmHexToRgb565(b.textColor, kDefaultTextColor);
+        out.mode = b.mode;
+        return true;
     }
     return false;
 }

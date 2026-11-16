@@ -154,7 +154,8 @@ uint8_t cp437For(uint32_t cp) {
         case 0xC9: return 0x90; // É
         case 0xE6: return 0x91; // æ
         case 0xC6: return 0x92; // Æ
-        case 0xF4: return 0x93; // ô
+        // ô (0x93) deliberately left out: its circumflex touches the "o" and reads as "8"
+        // ("H8tel de Ville") -> falls back to a plain "o".
         case 0xF6: return 0x94; // ö
         case 0xFB: return 0x96; // û
         case 0xF9: return 0x97; // ù
